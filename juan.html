@@ -1765,6 +1765,7 @@ function stampSeal(){
 
 /* ───────── controls ───────── */
 let seedCounter = (Math.random() * 1e9) | 0;
+const SG = +((location.hash.match(/[&#]sg=(\d+)/) || [])[1] || 0);
 const FF = +((location.hash.match(/[&#]ff=([\d.]+)/) || [])[1] || 1), FZ = +((location.hash.match(/[&#]fz=([\d.]+)/) || [])[1] || 0);
 (() => { if (/[&#]j=1/.test(location.hash)) scrollMode = true;
   const m = location.hash.match(/t=([a-z]+)&s=(\d+)/); if (!m) return;
@@ -1871,8 +1872,10 @@ function startPainting(){
     if (scrollMode){ buildJuan(sd); SEG = juan.seq[0]; } else juan.on = false;
     try { ghost.q = buildLandscape(sd); } finally { SEG = null; }
     mood.seed = sd; roll.seed0 = sd; ghost.done = false; if (juan.on) showYiJuan(); else showYi(mood); writePoem(mood, sd);
-    try { history.replaceState(null, '', `#t=${THEMES[themeIdx].id}&s=${sd}${scrollMode ? '&j=1' : ''}${FF !== 1 ? '&ff=' + FF : ''}${FZ ? '&fz=' + FZ : ''}${LO ? '&lo=1' : ''}`); } catch (_) {}
-    ghost.speed = (reduced ? 5 : 1) * (mood.T.tempo || 1); ghost.cur = null; ghost.wait = .2; ghost.on = true; ghostEl.classList.add('on'); setPaintBtn(true); };
+    try { history.replaceState(null, '', `#t=${THEMES[themeIdx].id}&s=${sd}${scrollMode ? '&j=1' : ''}${FF !== 1 ? '&ff=' + FF : ''}${FZ ? '&fz=' + FZ : ''}${LO ? '&lo=1' : ''}${SG ? '&sg=' + SG : ''}`); } catch (_) {}
+    ghost.speed = (reduced ? 5 : 1) * (mood.T.tempo || 1); ghost.cur = null; ghost.wait = .2; ghost.on = true; ghostEl.classList.add('on'); setPaintBtn(true);
+    /* #sg=N：测试用，直接从第 N 段落笔（种子与正常走到第 N 段时相同） */
+    if (SG && juan.on && SG < juan.seq.length) { juan.i = SG - 1; seedCounter = sd + SG; paintSegment(); } };
   if (hasInk) wash(go); else { hidePoem(); dropClones(); resetRoll(); go(); }
 }
 function wash(then){
