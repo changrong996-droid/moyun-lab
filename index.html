@@ -2033,12 +2033,12 @@ let last = performance.now(), fps = 60, tick = 0;
 resize();
 if (!glOK) { fallback('这台设备的显卡不支持半精度浮点渲染，墨化不开。换用新版 Chrome、Safari 或 Edge 打开即可。'); return; }
 function frame(now){
-  if (FZ && now / 1000 > FZ) { document.body.dataset.frozen = '1'; corner.textContent += ' · 定格'; return; }
+  if (FZ && now / 1000 > FZ) { document.body.dataset.frozen = '1'; corner.textContent = `定格 ${FZ}s · 共 ${tick} 帧 · 快进 ×${FF} · 第 ${(juan.i|0)+1}/${juan.seq ? juan.seq.length : 1} 段`; return; }
   const raw = Math.max(1e-3, (now - last) / 1000), dt = Math.min(raw, 1 / 30); last = now;
   fps = fps * .95 + (1 / raw) * .05;
   resize();
   /* 作画与卷动按真实时间走：帧率低时分几小步补足，不再跟着帧率变慢 */
-  for (let left = Math.min(raw, .25) * FF; left > 1e-6; ) { const d = Math.min(left, 1 / 30); ghostTick(d); rollTick(d); left -= d; }
+  for (let left = Math.min(raw, FF > 1 ? 2 : .25) * FF; left > 1e-6; ) { const d = Math.min(left, 1 / 30); ghostTick(d); rollTick(d); left -= d; }
   if (washing) washTick(dt);
   if (velQ.length) flush(velQ, velocity, 3000);
   if (dyeQ.length) flush(dyeQ, dye, 4);
