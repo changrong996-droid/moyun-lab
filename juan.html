@@ -1114,19 +1114,36 @@ function* fillCouplet(fix, aff, R){
    诗不再决定画。画完之后，诗才从语料里长出来，而且只能写画里有的东西：
    纸上没有花，「花」字就不许进诗；题里点名的字（寒江的「孤」「寒」）优先。
    中间联试写八次，每帧只走一个字位，散在作画的那几十秒里，点击和行笔都不卡。 */
+/* 画上有什么字：大类只说「有水」，不说是哪种水。每个段型把自己真画了的那几个字报上来，
+   长河报「河」，湖心报「湖」，孤城报「城」和「烟」；没报的同类字（海、九江五湖）一律不许进诗。 */
+const LEXN = { water:'水江波', gate:'城', mist:'云烟雾', birds:'鸟', man:'人客', pavilion:'亭', falls:'泉' };
+const LEXS = { changhe:{ water:'河水' }, hanjiang:{ water:'江水' }, gudiao:{ water:'江水' }, xuean:{ water:'江水' },
+  jiangtian:{ water:'江水波', birds:'鸟鸥' }, huxin:{ water:'湖水波' }, hutian:{ water:'湖水波' }, santa:{ water:'湖潭水波' },
+  hushan:{ water:'湖水' }, changdi:{ water:'湖水' }, shanjian:{ water:'溪涧水' }, xi:{ water:'溪水' }, kongshan:{ water:'溪涧水' },
+  songshi:{ water:'溪涧水' }, shazhu:{ water:'江水', birds:'雁鸟' }, ludi:{ water:'江水', birds:'雁' }, luoyan:{ water:'江水', birds:'雁' },
+  zhou:{ water:'江水', birds:'鸥鸟' }, guancheng:{ gate:'关城' }, gucheng:{ gate:'城', mist:'烟云' }, gudao:{ gate:'关' },
+  fengsui:{ mist:'烟' }, luori:{ mist:'云霞烟' } };
+const SEASONBAN = { 春:'秋冬', 夏:'春秋冬', 秋:'春夏冬', 冬:'春夏秋' };
+function paintLex(y, kinds, type){
+  const PT = y.PT || y.T, nar = Object.assign({}, LEXN, (type && LEXS[type]) || {}), lex = new Set();
+  if (y.shi === '晓' || y.shi === '暮') nar.mist = (nar.mist || '') + '霞';
+  for (const c in PRIM){ const k = PRIM[c]; if (!kinds.has(k)) continue;
+    if (!(k in nar) || nar[k].indexOf(c) >= 0 || (PT.im && PT.im.indexOf(c) >= 0)) lex.add(c); }
+  return lex;
+}
 function poemAff(y){
-  const T = y.T, aff = {};
-  for (const c in PRIM) aff[c] = (T.im ? T.im.indexOf(c) >= 0 : y.kinds.has(PRIM[c])) ? 1 : -9;
+  const PT = y.PT || y.T, aff = {}, lex = y.lex || new Set();
+  for (const c in PRIM) aff[c] = lex.has(c) ? 1 : -9;
   if (y.scene >= 0 && TBL){
     const IM = TBL.scenes[y.scene], A = TBL.aff[String(y.scene)];
     for (let i = 0; i < IM.length; i++){ const c = IM[i]; if (!(c in aff) || aff[c] > 0) aff[c] = Math.max(aff[c] || 0, A[i]); }
   }
-  for (const c of (T.ban || '')) aff[c] = -9;
-  for (const c of (T.im || '')) aff[c] = 1.4;
+  for (const c of (PT.im || '')) if (!(c in PRIM) || lex.has(c)) aff[c] = 1.4;
+  for (const c of (PT.ban || '') + (SEASONBAN[y.ji] || '')) aff[c] = -9;   // 禁字最后落：题里点了「秋」，这一卷却是春天，也不许写
   return aff;
 }
 function writePoem(y, seed){
-  y.poem = undefined;
+  y.poem = undefined; const PT = y.PT || y.T;
   const R = rng((seed * 40503 + 7) >>> 0), SLOTS = [[1,3],[1,4],[0,3],[2,4]];
   let aff = null, anc = null, ws = null, tot = 0, best = null, t = 0, gen = null;
   const step = () => {
@@ -1134,7 +1151,7 @@ function writePoem(y, seed){
     if (!TBL){ if (t++ > 60) { y.poem = null; return; } setTimeout(step, 150); return; }
     if (!aff){
       aff = poemAff(y); t = 0;
-      anc = TBL.pair.filter(p => aff[p[0]] > 0 && aff[p[1]] > 0 && (!y.T.im || y.T.im.indexOf(p[0]) >= 0 || y.T.im.indexOf(p[1]) >= 0)).sort((a, b) => b[2] - a[2]).slice(0, 16);
+      anc = TBL.pair.filter(p => aff[p[0]] > 0 && aff[p[1]] > 0 && (!PT.im || PT.im.indexOf(p[0]) >= 0 || PT.im.indexOf(p[1]) >= 0)).sort((a, b) => b[2] - a[2]).slice(0, 16);
       /* 长卷里前几段用过的字对，权重压低，换一对意象起句 */
       const usedC = juan.on && juan.used ? juan.used.join('') : '';
       ws = anc.map(p => Math.exp(p[2] / 1.4) * (usedC && (usedC.indexOf(p[0]) >= 0 || usedC.indexOf(p[1]) >= 0) ? .12 : 1)); tot = ws.reduce((a, b) => a + b, 0);
@@ -1151,10 +1168,10 @@ function writePoem(y, seed){
         }
       } else if (anc.length === 1 && TBL.uni[1].has(anc[0][0]) && TBL.uni[1].has(anc[0][1])) fix[1] = [anc[0][0], anc[0][1]];
       // 题里点名的字一个都没占住时，退一步：挑一个字位，只许语料里在这一位真对过、且带点名字的字对
-      if (y.T.im && !Object.keys(fix).length){
+      if (PT.im && !Object.keys(fix).length){
         const ks = [0,1,2,3,4].sort(() => R() - .5);
         for (const k of ks){
-          const c = TBL.pos[k].filter(p => (y.T.im.indexOf(p[0]) >= 0 || y.T.im.indexOf(p[1]) >= 0) && aff[p[0]] > -5 && aff[p[1]] > -5);
+          const c = TBL.pos[k].filter(p => (PT.im.indexOf(p[0]) >= 0 || PT.im.indexOf(p[1]) >= 0) && aff[p[0]] > -5 && aff[p[1]] > -5);
           if (c.length){ const p = c[Math.floor(R() * Math.min(c.length, 6))]; fix[k] = [p[0], p[1]]; break; }
         }
       }
@@ -1191,6 +1208,7 @@ function buildLandscape(seed){
   const T = THEMES[themeIdx];
   const y = SEG ? seekMood(seed) : (T.im ? themeMood(T, seed) : conceive(seed));
   y.T = SEG ? THEMES[0] : T; mood = y;
+  y.PT = SEG && juan.T ? juan.T : y.T;   // 画按段型走，诗按这一卷的题走：大漠的卷，每段的诗都不许写春花雪柳
   if (SEG){   // 段型定虚实；时辰定墨色
     y.xs = { kai:.2, feng:.5, shui:.16, cun:.4, yun:.22, zhu:.58, wei:.15, lin:.38, xi:.45, zhou:.14,
       xuefeng:.4, hanjiang:.14, xuean:.3, gudiao:.3, shaqiu:.3, changhe:.25, fengsui:.3, gucheng:.5, luori:.2,
@@ -2046,7 +2064,7 @@ function buildLandscape(seed){
         if (cur.length > 1) out.push(Object.assign({}, d, { pts:cur }));
       });
       Q.length = 0; for (const d of out) Q.push(d); } }
-  y.kinds = kinds; y.kindsList = Array.from(kinds);
+  y.kinds = kinds; y.kindsList = Array.from(kinds); y.lex = paintLex(y, kinds, SEG && SEG.type);
   F(() => showPoemWhenReady(y), .6);
   return Q;
 }
