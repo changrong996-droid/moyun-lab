@@ -1491,9 +1491,11 @@ function buildLandscape(seed){
     return { x, w, top: () => v + h + .06*s, base: v };
   }
   function smoke(x, v, h){   // 孤烟直：几乎不摆
-    const pts = []; for (let i = 0; i <= 16; i++){ const t = i/16; pts.push([x + W(Math.sin(t*3)*.004*t + t*t*.02), v + h*t]); }
-    S(pts, { r:.0035, ink:.35, water:.75, dry:.1, fade:.6, speed:.35, note:.12, vel:.3 });
-    S(pts, { r:.008, ink:.08, water:.9, speed:1.2, note:.4, after:.05, vel:.15 });
+    /* 烟是气不是杆：底下细而实，越往上越淡越散，顶上被风带偏一点 */
+    const pts = []; for (let i = 0; i <= 16; i++){ const t = i/16; pts.push([x + W(Math.sin(t*3)*.004*t + t*t*t*.035), v + h*t]); }
+    S(pts.slice(0, 9), { r:.0022, ink:.24, water:.8, dry:.1, fade:.7, speed:.35, note:.12, vel:.3 });
+    S(pts.slice(6), { r:.004, ink:.1, water:.92, fade:.8, speed:.5, note:.12, after:.02, vel:.2 });
+    S(pts, { r:.009, ink:.05, water:.95, speed:1.2, note:.4, after:.05, vel:.15 });
   }
   function lantern(x, v, s){   // 三潭的石塔：两柱、圆身、尖顶、宝珠，脚下一串倒影
     const leg = { r:.0018, ink:1.05, speed:.8, note:.05 };
