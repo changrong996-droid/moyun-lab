@@ -520,23 +520,36 @@ const dab = (x, y, r, ink, cin, water, dry, hard = 0, dx = 1, dy = 0, seed = 0) 
 const vsplat = (x, y, r2, fx, fy) => ({ x, y, r2, hard: 0, a: fx, c: fy, w: 0, dry: 0, dx: 1, dy: 0, seed: 0 });
 
 function flush(q, target, lim){
-  let i = 0;
+  /* 落墨只重算这一批笔触周围的那一块：先在框里写到另一张，再把这一块拷回来。
+     原来每 32 个笔触就把整张墨层（约 160 万格）算一遍，长笔一帧要算十几遍。 */
+  let i = 0; const A = aspect();
   while (i < q.length) {
     const n = Math.min(MAXS, q.length - i);
     posA.fill(0); valA.fill(0); dirA.fill(0);
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
     for (let k = 0; k < n; k++) {
-      const s = q[i + k], o = k * 4;
-      posA[o] = s.x; posA[o+1] = s.y; posA[o+2] = Math.max(s.r2, 1e-7); posA[o+3] = s.hard;
+      const s = q[i + k], o = k * 4, r2 = Math.max(s.r2, 1e-7);
+      posA[o] = s.x; posA[o+1] = s.y; posA[o+2] = r2; posA[o+3] = s.hard;
       valA[o] = s.a; valA[o+1] = s.c; valA[o+2] = s.w; valA[o+3] = s.dry;
       dirA[o] = s.dx; dirA[o+1] = s.dy; dirA[o+2] = s.seed;
+      const ry = Math.sqrt(40 * r2), rx = ry / A;
+      if (s.x - rx < x0) x0 = s.x - rx; if (s.x + rx > x1) x1 = s.x + rx;
+      if (s.y - ry < y0) y0 = s.y - ry; if (s.y + ry > y1) y1 = s.y + ry;
     }
     const u = P.splat.use();
     gl.uniform1i(u.uTarget, target.read.bind(0));
-    gl.uniform1f(u.aspect, aspect()); gl.uniform1i(u.count, n);
+    gl.uniform1f(u.aspect, A); gl.uniform1i(u.count, n);
     gl.uniform2f(u.res, target.w, target.h); gl.uniform1f(u.lim, lim);
     gl.uniform4fv(u.uPos, posA); gl.uniform4fv(u.uVal, valA); gl.uniform4fv(u.uDir, dirA);
-    blit(target.write); target.swap();
+    const px0 = Math.max(0, Math.floor(x0 * target.w) - 2), px1 = Math.min(target.w, Math.ceil(x1 * target.w) + 2);
+    const py0 = Math.max(0, Math.floor(y0 * target.h) - 2), py1 = Math.min(target.h, Math.ceil(y1 * target.h) + 2);
     i += n;
+    if (px1 <= px0 || py1 <= py0) continue;
+    if ((px1 - px0) * (py1 - py0) > target.w * target.h * .45) { blit(target.write); target.swap(); continue; }
+    gl.enable(gl.SCISSOR_TEST); gl.scissor(px0, py0, px1 - px0, py1 - py0);
+    blit(target.write);
+    const c = P.copy.use(); gl.uniform1i(c.uTexture, target.write.bind(0)); blit(target.read);
+    gl.disable(gl.SCISSOR_TEST);
   }
   q.length = 0;
 }
@@ -887,7 +900,7 @@ function buildJuan(seed){
   const end = SHI.indexOf(pk(['暮', '夜', '夜'])), n = seq.length;
   juan.seq = seq.map((t, i) => { const shi = SHI[Math.min(end, Math.floor(i / (n - 1) * (end + .999)))];
     return { type:t, name:NM[t], shi, ji, qi, hz:.4, disc: i === n - 1 ? (shi === '夜' ? 'moon' : 'sun') : null, i, n }; });
-  juan.i = 0; juan.on = true; juan.T = T;
+  juan.i = 0; juan.on = true; juan.T = T; juan.used = [];
 }
 function conceive(seed){
   const R = rng((seed * 2654435761) >>> 0), pk = a => a[Math.floor(R() * a.length)];
@@ -1080,7 +1093,9 @@ function writePoem(y, seed){
     if (!aff){
       aff = poemAff(y); t = 0;
       anc = TBL.pair.filter(p => aff[p[0]] > 0 && aff[p[1]] > 0 && (!y.T.im || y.T.im.indexOf(p[0]) >= 0 || y.T.im.indexOf(p[1]) >= 0)).sort((a, b) => b[2] - a[2]).slice(0, 16);
-      ws = anc.map(p => Math.exp(p[2] / 1.4)); tot = ws.reduce((a, b) => a + b, 0);
+      /* 长卷里前几段用过的字对，权重压低，换一对意象起句 */
+      const usedC = juan.on && juan.used ? juan.used.join('') : '';
+      ws = anc.map(p => Math.exp(p[2] / 1.4) * (usedC && (usedC.indexOf(p[0]) >= 0 || usedC.indexOf(p[1]) >= 0) ? .12 : 1)); tot = ws.reduce((a, b) => a + b, 0);
     }
     if (!gen){
       const pickA = () => { let r = R() * tot; for (let i = 0; i < anc.length; i++){ r -= ws[i]; if (r <= 0) return anc[i]; } return anc[0]; };
@@ -1107,10 +1122,12 @@ function writePoem(y, seed){
     if (!o.done){ setTimeout(step, 16); return; }
     gen = null;
     const r = o.value;
-    if (r && !(best || []).some(q => q[1] === r[1])) (best = best || []).push(r);
-    if (++t < 8) setTimeout(step, 16);
+    const usedL = juan.on && juan.used ? juan.used : [];
+    if (r && !(best || []).some(q => q[1] === r[1]) && usedL.indexOf(r[1]) < 0 && usedL.indexOf(r[2]) < 0) (best = best || []).push(r);
+    if (++t < (usedL.length ? 14 : 8) || (!best && t < 24)) setTimeout(step, 16);
     else { if (best) best.sort((a, b) => b[0] - a[0]); const top = best ? best.slice(0, 3) : null;
-           const pk = top ? top[Math.floor(R() * top.length)] : null; y.poem = pk ? [pk[1], pk[2]] : null; }
+           const pk = top ? top[Math.floor(R() * top.length)] : null; y.poem = pk ? [pk[1], pk[2]] : null;
+           if (pk && juan.on){ (juan.used = juan.used || []).push(pk[1], pk[2]); } }
   };
   setTimeout(step, 400);
 }
@@ -1149,7 +1166,7 @@ function buildLandscape(seed){
   const D = (x, v, o) => { const d = Object.assign({ dot:true, x, y:0, r:.005, ink:1, cin:0, water:.4, hard:0, after:.03 }, o); d.y = M(v); d.ink *= INK; Q.push(d); };
   const F = (fn, after = 0) => Q.push({ fn, after });
   const wave = () => { const k = [rr(0,6.28), rr(0,6.28), rr(0,6.28)]; return x => Math.sin(x*23+k[0])*.5 + Math.sin(x*57+k[1])*.3 + Math.sin(x*131+k[2])*.2; };
-  const range = (peaks, base, nAmp) => { const n = wave(); return x => { let h = 0; for (const p of peaks) { const u = Math.abs(x - p.c) / (p.w * wx); h = Math.max(h, p.h * Math.exp(-Math.pow(u, 1.5))); } return base + h + nAmp * n(x) * Math.min(1, h / .05); }; };
+  const range = (peaks, base, nAmp) => { const n = wave(); return x => { let h = 0; for (const p of peaks) { const u = Math.abs(x - p.c) / (p.w * wx * (x < p.c ? (p.wl || 1) : (p.wr || 1))); h = Math.max(h, p.h * Math.exp(-Math.pow(u, p.k || 1.5))); } return base + h + nAmp * n(x) * Math.min(1, h / .05); }; };
   const runs = (f, base, x0, x1, dx, th) => {
     const out = []; let cur = null;
     for (let x = x0; x <= x1 + 1e-9; x += dx) { const v = f(x); if (v - base > th) { if (!cur) { cur = []; out.push(cur); } cur.push([x, v]); } else cur = null; }
@@ -1329,7 +1346,7 @@ function buildLandscape(seed){
       for (const run of runs(x => f(x) - off, base, 0, 1, .02, .004)) S(run, { r:.022, ink:ij, water:.75, speed:3, note:.3, after:.02, vel:.22 }); }
     return f;
   };
-  const massive = (peaks, base, o) => { const f = range(peaks, base, .01); mountain(f, base, o); return f; };
+  const massive = (peaks, base, o) => { const f = range(peaks, base, o.nAmp || .01); mountain(f, base, o); return f; };
 
 
   /* ═══ 新原件：关城、孤烟、沙丘、长河、石塔、倒影、芦苇、雁、雪天留白 ═══ */
@@ -1443,11 +1460,51 @@ function buildLandscape(seed){
     return { t, hz, c, pts, at, masses };
   }
   const farToNear = Lo => Lo.masses.slice().sort((a, b) => b.d - a.d);
+
+  /* 接缝：一段的笔画若顶到段边，就会在同一条竖线上齐齐断掉。
+     横向的（地平、水纹、云带、坡脚）各自往前一段伸过去一截，长短不一；
+     竖向的（山廓、皴、树）各自在离边不同的地方收笔。左边是下一段要接的地方，只收不伸。 */
+  function ragged(Q, right){
+    const clip = (pts, lo, hi) => { const out = []; let cur = [];
+      for (let i = 0; i < pts.length; i++){ const p = pts[i], inn = p[0] >= lo && p[0] <= hi;
+        if (i){ const a = pts[i-1], ain = a[0] >= lo && a[0] <= hi;
+          if (ain !== inn){ const e = (a[0] < lo || p[0] < lo) ? lo : hi, t = (e - a[0]) / ((p[0] - a[0]) || 1e-9), q = [e, a[1] + (p[1] - a[1]) * t];
+            if (inn) cur = [q]; else { cur.push(q); if (cur.length > 1) out.push(cur); cur = []; } } }
+        if (inn) cur.push(p); }
+      if (cur.length > 1) out.push(cur); return out; };
+    const extend = (pts, to) => { const n = pts.length, atEnd = pts[n-1][0] >= pts[0][0], e = atEnd ? pts[n-1] : pts[0], f = atEnd ? pts[n-2] : pts[1];
+      const sl = Math.abs(e[0] - f[0]) > 1e-6 ? Math.max(-.12, Math.min(.12, (e[1] - f[1]) / (e[0] - f[0]))) * .5 : 0, add = [];
+      let x = e[0], v = e[1];
+      while (to - x > 1e-6){ const d = Math.min(.012, to - x); x += d; v += sl * d + rr(-.0007, .0007); add.push([x, v]); }
+      return atEnd ? pts.concat(add) : add.reverse().concat(pts); };
+    const out = [];
+    for (const d of Q){
+      if (d.dot){ if ((d.x < .03 || (right && d.x > .97)) && R() < .45) continue; out.push(d); continue; }
+      if (!d.pts || d.pts.length < 2){ out.push(d); continue; }
+      let mn = 9, mx = -9, vn = 9, vx = -9;
+      for (const p of d.pts){ if (p[0] < mn) mn = p[0]; if (p[0] > mx) mx = p[0]; if (p[1] < vn) vn = p[1]; if (p[1] > vx) vx = p[1]; }
+      const L = mn < .025, Rt = right && mx > .975;
+      if (!L && !Rt){ out.push(d); continue; }
+      const flat = mx - mn > (vx - vn) * 2.5 && mx - mn > .03;
+      let pts = d.pts, hi = 9;
+      if (Rt){ hi = flat ? 1 + rr(-.04, .12) : 1 - rr(0, .07); if (hi > mx) pts = extend(pts, hi); }
+      const lo = L ? rr(.005, flat ? .08 : .06) : -9;
+      const rs = clip(pts, lo, hi);
+      rs.forEach((r, k) => out.push(k ? Object.assign({}, d, { pts:r, after:.01 }) : Object.assign(d, { pts:r })));
+    }
+    Q.length = 0; for (const d of out) Q.push(d);
+  }
   function drawMass(m, o = {}){
-    const hK = o.H ? o.H / m.h : (o.hK || 1), ww = o.H ? Math.max(m.w, o.H*.32) : m.w;
-    const pk = [{ c:m.x, h:m.h*hK, w:ww }, { c:m.x + m.side*ww*rr(.7,1.1)*wx, h:m.h*hK*rr(.35,.6), w:ww*.7 }];
-    const f = massive(pk, m.base, { ink:(o.ink ?? .95)*(1 - m.d*.22), s:m.s, cun:Math.round((o.cun ?? 12)*m.s*Math.sqrt(hK)), moss:Math.round((o.moss ?? 6)*m.s),
-                                     folds:o.folds ?? 2, x0:Math.max(0, m.x - .4), x1:Math.min(1, m.x + .4) });
+    const hK = o.H ? o.H / m.h : (o.hK || 1), ww = o.H ? Math.max(m.w, o.H*.42) : m.w;
+    let pk = [{ c:m.x, h:m.h*hK, w:ww }, { c:m.x + m.side*ww*rr(.7,1.1)*wx, h:m.h*hK*rr(.35,.6), w:ww*.7 }];
+    /* 高的主峰：一主两宾。主峰两坡一缓一急、峰头圆钝；一侧贴一座次峰，另一侧起一道低肩，外面再带一座远些的小峰 */
+    if (o.H && o.H > .3){ const H = m.h*hK, sd = m.side, steep = rr(.6, .8), slow = rr(1.15, 1.5);
+      pk = [{ c:m.x, h:H, w:ww*.8, k:rr(1.7, 2.2), wl:sd > 0 ? slow : steep, wr:sd > 0 ? steep : slow },
+            { c:m.x + sd*ww*rr(.45, .62)*wx, h:H*rr(.66, .8), w:ww*rr(.42, .55), k:rr(1.6, 2) },
+            { c:m.x - sd*ww*rr(.5, .8)*wx, h:H*rr(.34, .48), w:ww*rr(.5, .7), k:1.4 },
+            { c:m.x + sd*ww*rr(1.05, 1.35)*wx, h:H*rr(.22, .34), w:ww*.6, k:1.5 }]; }
+    const f = massive(pk, m.base, { nAmp: o.H && o.H > .3 ? .022 : .01, ink:(o.ink ?? .95)*(1 - m.d*.22), s:m.s, cun:Math.round((o.cun ?? 12)*m.s*Math.sqrt(hK)), moss:Math.round((o.moss ?? 6)*m.s),
+                                     folds:o.folds ?? (o.H && o.H > .3 ? 5 : 2), x0:Math.max(0, m.x - .4), x1:Math.min(1, m.x + .4) });
     m.top = x => f(x); m.peakV = m.base + m.h*hK;
     return f;
   }
@@ -1716,6 +1773,7 @@ function buildLandscape(seed){
   /* 宾主：主势在左在右，一半一半。整幅镜像，不改任何一笔的形。 */
   if (mir){ for (const d of Q){ if (d.pts) d.pts = d.pts.map(p => [1 - p[0], p[1]]); else if (d.dot) d.x = 1 - d.x; }
     const b = y.poemBox; if (b) y.poemBox = { x0:1 - b.x1, x1:1 - b.x0, s1:b.s1 }; }
+  if (SEG) ragged(Q, !!FRAME);
   if (FRAME){ const f = FRAME;
     for (const d of Q){ if (d.pts) d.pts = d.pts.map(p => [f.x0 + p[0]*f.w, p[1]]); else if (d.dot) d.x = f.x0 + d.x*f.w; }
     const b = y.poemBox; if (b) y.poemBox = { x0:f.x0 + b.x0*f.w, x1:f.x0 + b.x1*f.w, s1:b.s1 }; }
@@ -1812,12 +1870,17 @@ function applyScroll(S){
   const wD = Math.floor(S * dye.w); if (wD > roll.kD){ const n = wD - roll.kD; shiftTex(dye, n / dye.w); shiftTex(baseF, n / dye.w); roll.kD = wD; }
   const wV = Math.floor(S * velocity.w); if (wV > roll.kV){ shiftTex(velocity, (wV - roll.kV) / velocity.w); roll.kV = wV; }
   roll.fr = S - roll.kD / dye.w;
-  bakePaper();
-  const cw = canvas.getBoundingClientRect().width;
+  roll.dirty = true;
+}
+/* 纸纹和留在纸上的题诗，一帧只跟一次（卷动时一帧里可能走好几小步） */
+function syncRoll(){
+  roll.dirty = false; bakePaper();
+  const S = roll.S, cw = canvas.getBoundingClientRect().width;
   roll.clones = roll.clones.filter(c => { const dx = (S - c.S0) * cw; if (dx > cw * 1.3){ c.el.remove(); return false; } c.el.style.transform = `translateX(${dx}px)`; return true; });
 }
 /* 一段要卷出画面之前，先把它记下来：存画时把这些条拼成一整卷 */
 function captureStrip(){
+  if (roll.dirty) syncRoll();
   render();
   const w = canvas.width, h = canvas.height, x0 = Math.round(w * (1 - STEP)), ws = w - x0;
   const px = new Uint8Array(ws * h * 4);
@@ -2043,7 +2106,8 @@ function frame(now){
   fps = fps * .95 + (1 / raw) * .05;
   resize();
   /* 作画与卷动按真实时间走：帧率低时分几小步补足，不再跟着帧率变慢 */
-  for (let left = Math.min(raw, FF > 1 ? 2 : .25) * FF; left > 1e-6; ) { const d = Math.min(left, 1 / 30); ghostTick(d); rollTick(d); left -= d; }
+  for (let left = Math.min(raw, FF > 1 ? 2 : .12) * FF; left > 1e-6; ) { const d = Math.min(left, 1 / 30); ghostTick(d); rollTick(d); left -= d; }
+  if (roll.dirty) syncRoll();
   if (washing) washTick(dt);
   if (velQ.length) flush(velQ, velocity, 3000);
   if (dyeQ.length) flush(dyeQ, dye, 4);
