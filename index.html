@@ -1763,6 +1763,7 @@ function stampSeal(){
 
 /* ───────── controls ───────── */
 let seedCounter = (Math.random() * 1e9) | 0;
+const FF = +((location.hash.match(/[&#]ff=([\d.]+)/) || [])[1] || 1), FZ = +((location.hash.match(/[&#]fz=([\d.]+)/) || [])[1] || 0);
 (() => { if (/[&#]j=1/.test(location.hash)) scrollMode = true;
   const m = location.hash.match(/t=([a-z]+)&s=(\d+)/); if (!m) return;
   const k = THEMES.findIndex(t => t.id === m[1]); if (k >= 0) { themeIdx = k; seedCounter = +m[2]; } })();
@@ -1841,7 +1842,7 @@ function paintSegment(){
   RESERVE = []; FRAME = { x0:0, w:SEGW }; NODISC = !SEG.disc;
   let q; try { q = buildLandscape(sd); } finally { FRAME = null; NODISC = false; SEG = null; }
   mood.seed = sd; writePoem(mood, sd); yiSeg();
-  ghost.q = q; ghost.speed = (reduced ? 5 : 1) * (mood.T.tempo || 1); ghost.cur = null; ghost.wait = .3; ghost.on = true; ghost.done = false;
+  ghost.q = q; ghost.speed = (reduced ? 5 : 1) * (mood.T.tempo || 1) * FF; ghost.cur = null; ghost.wait = .3; ghost.on = true; ghost.done = false;
   ghostEl.classList.add('on'); setPaintBtn(true);
 }
 function rollTick(dt){
@@ -1868,8 +1869,8 @@ function startPainting(){
     if (scrollMode){ buildJuan(sd); SEG = juan.seq[0]; } else juan.on = false;
     try { ghost.q = buildLandscape(sd); } finally { SEG = null; }
     mood.seed = sd; roll.seed0 = sd; ghost.done = false; if (juan.on) showYiJuan(); else showYi(mood); writePoem(mood, sd);
-    try { history.replaceState(null, '', `#t=${THEMES[themeIdx].id}&s=${sd}${scrollMode ? '&j=1' : ''}`); } catch (_) {}
-    ghost.speed = (reduced ? 5 : 1) * (mood.T.tempo || 1); ghost.cur = null; ghost.wait = .2; ghost.on = true; ghostEl.classList.add('on'); setPaintBtn(true); };
+    try { history.replaceState(null, '', `#t=${THEMES[themeIdx].id}&s=${sd}${scrollMode ? '&j=1' : ''}${FF !== 1 ? '&ff=' + FF : ''}${FZ ? '&fz=' + FZ : ''}`); } catch (_) {}
+    ghost.speed = (reduced ? 5 : 1) * (mood.T.tempo || 1) * FF; ghost.cur = null; ghost.wait = .2; ghost.on = true; ghostEl.classList.add('on'); setPaintBtn(true); };
   if (hasInk) wash(go); else { hidePoem(); dropClones(); resetRoll(); go(); }
 }
 function wash(then){
@@ -2032,6 +2033,7 @@ let last = performance.now(), fps = 60, tick = 0;
 resize();
 if (!glOK) { fallback('这台设备的显卡不支持半精度浮点渲染，墨化不开。换用新版 Chrome、Safari 或 Edge 打开即可。'); return; }
 function frame(now){
+  if (FZ && now / 1000 > FZ) { document.body.dataset.frozen = '1'; corner.textContent += ' · 定格'; return; }
   const raw = Math.max(1e-3, (now - last) / 1000), dt = Math.min(raw, 1 / 30); last = now;
   fps = fps * .95 + (1 / raw) * .05;
   resize();
