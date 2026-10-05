@@ -448,10 +448,10 @@ let baseF = null, HIST = [], sized = null;
 const HMAX = coarse ? 3 : 5;
 /* 长卷：手卷从右往左看，所以纸往右走，左边不断露出新纸。
    S 是纸一共走了几个屏宽；墨层只按整格平移（不糊），不足一格的余数在显示时补上，纸纹按连续位移重算。 */
-const STEP = .55, SEGW = .59, STRIP_H = 1000;
+const STEP = .70, SEGW = .74, STRIP_H = 1000;   // 每卷过 0.7 屏；右边留下的三成，是上一段的左缘
 let FRAME = null, NODISC = false, scrollMode = false, SEG = null;
 const juan = { seq:[], i:0, on:false };
-const roll = { on:false, S:0, from:0, target:0, t:0, dur:5.5, kD:0, kV:0, idle:0, strips:[], clones:[], seed0:null, fr:0 };
+const roll = { on:false, S:0, from:0, target:0, t:0, dur:6.5, kD:0, kV:0, idle:0, strips:[], clones:[], seed0:null, fr:0 };
 const theme = {};
 
 function gridRes(n){
@@ -1339,11 +1339,26 @@ function buildLandscape(seed){
       if (pts.length > 1) S(pts, { r:.028, ink:.05, water:.95, speed:3.2, note:.3, after:.02, vel:.2 }); }
   }
   const farHills = (base, n, h0, h1, ink) => {
-    const pk = []; for (let i = 0; i < n; i++) pk.push({ c: rr(-.05,1.05), h: rr(h0,h1), w: rr(.07,.14) });
-    const f = range(pk, base, .006);
-    for (const run of runs(f, base, 0, 1, .008, .008)) S(run, { r:.0045, ink, water:.8, speed:.9, note:.14, vel:.35 });
+    /* 远山不是一排馒头：峰多而交叠，高低宽窄、两坡缓急都不同，偶有一两座拔起；
+       山脚哪里隐进烟里由一条低频的“云断”决定，所以一抹远山时断时续，不是一个个孤立的包 */
+    const pk = [], m = Math.round(n * rr(1.8, 2.4));
+    for (let i = 0; i < m; i++){ const big = R() < .22;
+      pk.push({ c: rr(-.08, 1.08), h: big ? rr(h1*.85, h1*1.3) : rr(h0*.5, h1*.7), w: big ? rr(.05, .1) : rr(.03, .18), k: rr(1.2, 2.3), wl: rr(.55, 1.6), wr: rr(.55, 1.6) }); }
+    const f = range(pk, base, .007);
+    const k1 = rr(4, 7), k2 = rr(10, 15), p1 = rr(0, 6.28), p2 = rr(0, 6.28), cut = rr(.45, .7);
+    const fog = x => .62*Math.sin(x*k1 + p1) + .38*Math.sin(x*k2 + p2);
+    const pieces = run => { const out = []; let cur = [];
+      for (const p of run){ if (fog(p[0]) > cut){ if (cur.length > 3) out.push(cur); cur = []; } else cur.push(p); }
+      if (cur.length > 3) out.push(cur); return out; };
+    for (const run of runs(f, base, -.02, 1.02, .008, .004)) for (const pc of pieces(run))
+      S(pc, { r:.004, ink:ink*rr(.7, 1.1), water:.8, fade:.4, speed:.9, note:.14, vel:.35 });
     for (let j = 0; j < Math.round(y.wash*.6); j++){ const off = .01 + j*.02, ij = ink*.5*(1 - j/(y.wash*.6+.5));
-      for (const run of runs(x => f(x) - off, base, 0, 1, .02, .004)) S(run, { r:.022, ink:ij, water:.75, speed:3, note:.3, after:.02, vel:.22 }); }
+      for (const run of runs(x => f(x) - off, base, -.02, 1.02, .02, .004)) for (const pc of pieces(run)) S(pc, { r:.022, ink:ij, water:.75, speed:3, note:.3, after:.02, vel:.22 }); }
+    /* 再压一层更近更淡的低坡，只占一截 */
+    if (R() < .7){ const c0 = rr(.05, .6), c1 = c0 + rr(.25, .45), pk2 = [];
+      for (let i = 0; i < 4; i++) pk2.push({ c: rr(c0, c1), h: rr(h0*.4, h1*.45), w: rr(.05, .14), k:1.6, wl: rr(.7, 1.4), wr: rr(.7, 1.4) });
+      const f2 = range(pk2, base - .018, .004);
+      for (const run of runs(f2, base - .018, c0 - .1, c1 + .1, .01, .003)) S(run, { r:.016, ink:ink*.32, water:.85, speed:2.6, note:.3, after:.02, vel:.2 }); }
     return f;
   };
   const massive = (peaks, base, o) => { const f = range(peaks, base, o.nAmp || .01); mountain(f, base, o); return f; };
@@ -1357,8 +1372,10 @@ function buildLandscape(seed){
   function disc(kind, x, v, big){
     if (kind === 'sun') D(x, v, { r:.042*big, ink:0, cin:1.3/INK, water:.15, hard:1, after:.9, chime:true });
     else {
-      const pts = []; for (let i = 0; i <= 30; i++){ const a = i/30*6.2832; pts.push([x + W(.038*big*Math.cos(a)), v + .038*big*Math.sin(a)]); }
-      S(pts, { r:.0022, ink:.5, water:.35, speed:.5, note:.2, after:.2, vel:.3 });
+      D(x, v, { r:.075*big, ink:.07, water:.6, after:.3 });                    // 月晕
+      D(x, v, { r:.034*big, ink:.42, water:.12, hard:1, after:.5 });            // 月面
+      const pts = []; for (let i = 0; i <= 30; i++){ const a = i/30*6.2832 + 1; pts.push([x + W(.035*big*Math.cos(a)), v + .035*big*Math.sin(a)]); }
+      for (let i = 0; i < 2; i++){ const a0 = Math.floor(rr(0, 18)); S(pts.slice(a0, a0 + Math.floor(rr(6, 11))), { r:.0016, ink:.3, water:.3, speed:.6, note:.2, after:.1, vel:.3 }); }
       F(() => { play(9, .7, .4, 'harm', true); setTimeout(() => play(11, .55, .5, 'harm', true), 420); }, .7);
     }
   }
