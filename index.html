@@ -1516,10 +1516,15 @@ function buildLandscape(seed){
     reflect(x, v, .012*s, 4, .3);
   }
   function reeds(x, v, n, s){
-    for (let i = 0; i < n; i++){ const xx = x + W(rr(-.04,.04)*s), L = rr(.03,.06)*s, a = rr(-.25,.35), pts = [];
-      for (let k = 0; k <= 5; k++){ const t = k/5; pts.push([xx + W(Math.sin(a)*L*t*t), v + L*t]); }
-      S(pts, { r:.0011, ink:.75, water:.1, dry:.35, fade:.5, speed:1.6, note:.04, after:.006, vel:.25 });
-      D(pts[5][0] + W(.002), pts[5][1] + .002, { r:.0035, ink:.35, water:.5, after:.01 }); }
+    /* 芦苇是一丛有远近的细草，不是一排亮竖线：同一阵风里一齐偏，长短浓淡错开，根部先洇一点湿墨，穗子是斜挑的一小笔 */
+    const wind = rr(.15, .45) * (R() < .5 ? -1 : 1);
+    D(x, v + .003, { r:.012*s, ink:.06, water:.9, after:.02 });
+    for (let i = 0; i < n; i++){ const back = R() < .45, xx = x + W(rr(-.045,.045)*s), L = rr(.022,.05)*s*(back ? .75 : 1),
+        a = wind + rr(-.18, .18), pts = [];
+      for (let k = 0; k <= 5; k++){ const t = k/5; pts.push([xx + W(Math.sin(a)*L*t*t*1.4), v + L*t]); }
+      S(pts, { r:.0009, ink:back ? rr(.14, .22) : rr(.26, .4), water:.4, dry:.12, fade:.75, speed:1.6, note:.04, after:.006, vel:.25 });
+      if (R() < .6){ const e = pts[5], d = Math.sign(a) || 1;
+        S([[e[0], e[1]], [e[0] + W(d*.006*s), e[1] + .004*s]], { r:.0016, ink:back ? .1 : .18, water:.6, fade:.8, speed:1.8, note:.03, after:.008 }); } }
   }
 
   /* ═══ 法·势：先定一条主势线，山石沿着它一开一合，最后找出最大的留白 ═══
@@ -1988,7 +1993,7 @@ function buildLandscape(seed){
       const Lo = layout({ diag:2, liang:2, zhi:1 }, hb - .04), ms = farToNear(Lo);
       for (const m of ms){ sand(m.x, m.base + .01, m.w*1.6*wx); sand(m.x + W(m.side*m.w*.5), m.base + .022*m.s, m.w*wx); m.top = () => m.base + .02; }
       for (let i = 0; i < 3; i++){ const p = Lo.at(rr(.15, .9)); sand(p[0] + W(rr(-.08, .08)), p[1] + rr(-.01, .01), rr(.04, .09)); }   // 远处再添几道浅渚
-      const nm = ms[ms.length - 1]; reeds(nm.x, nm.base + .01, 14, 1.2);
+      const nm = ms[ms.length - 1]; reeds(nm.x, nm.base + .01, 11, 1.1);
       if (ms.length > 1){ const m2 = ms[ms.length - 2]; reeds(Math.max(.05, Math.min(.95, m2.x + W(m2.side*m2.w*.4))), m2.base + .012, 8, .8); }
       reeds(ms[0].x, ms[0].base + .01, 5, .5);
       drawWater(Lo, .14, { banks:false, ripples:9 });
