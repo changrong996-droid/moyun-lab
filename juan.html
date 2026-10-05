@@ -1470,9 +1470,16 @@ function buildLandscape(seed){
   }
   function river(v0, v1, xc, w0){   // 长河：近宽远窄，蜿蜒到天边
     const at = t => [xc + Math.sin(t*5)*.06*(1 - t), v0 + (v1 - v0)*t, w0*(1 - t*.92)];
-    for (const side of [-1, 1]){ const pts = []; for (let i = 0; i <= 20; i++){ const q = at(i/20); pts.push([q[0] + W(side*q[2]), q[1]]); }
-      S(pts, { r:.0022, ink:.6, water:.25, dry:.35, fade:.5, speed:.8, note:.08 }); }
-    for (let i = 0; i < 8; i++){ const q = at(rr(0,.8)); S([[q[0] - W(q[2]*.7), q[1]], [q[0] + W(q[2]*.4), q[1]]], { r:.0014, ink:.35, dry:.5, speed:1.4, note:.06, after:.02 }); }
+    /* 先一道淡水汽铺出河身，再勾岸：岸线断续、近浓远淡、湿笔不起飞白，不画成两道亮线 */
+    for (let k = 0; k < 3; k++){ const pts = []; for (let i = 0; i <= 16; i++){ const t = i/16, q = at(t); pts.push([q[0] + W(q[2]*rr(-.25,.25)), q[1]]); }
+      S(pts, { r:.006 + w0*.03, ink:.05, water:.95, fade:.7, speed:1.3, note:.3, after:.03, vel:.15 }); }
+    for (const side of [-1, 1]){ let t = rr(0, .06);
+      while (t < .97){ const len = rr(.12, .3), t1 = Math.min(1, t + len), pts = [];
+        for (let i = 0; i <= 8; i++){ const u = t + (t1 - t)*i/8, q = at(u); pts.push([q[0] + W(side*q[2]*rr(.92, 1.06)), q[1]]); }
+        const near = 1 - t*.7;
+        S(pts, { r:.0016 + .0008*near, ink:(.2 + .22*near), water:.55, dry:.08, fade:.65, speed:.9, note:.08, after:.02 });
+        t = t1 + rr(.05, .14); } }
+    for (let i = 0; i < 6; i++){ const q = at(rr(0,.7)); S([[q[0] - W(q[2]*.55), q[1]], [q[0] + W(q[2]*.3), q[1]]], { r:.0012, ink:.16, water:.6, dry:.2, speed:1.4, note:.06, after:.02 }); }
     return at(1);
   }
   function gate(x, v, s){   // 关城：收分的城墙、雉堞、拱门，城上一座楼
