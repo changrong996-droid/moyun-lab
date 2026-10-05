@@ -439,7 +439,9 @@ function dbl(w, h, ...a){
 function free(f){ if (!f) return; if (f.read) { free(f.read); free(f.write); return; } gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fb); }
 
 /* ───────── state ───────── */
-const SIM = coarse ? 144 : 176, DYE = coarse ? 640 : 900, ITER = 24;
+/* #lo=1：低配测试档（无 GPU 的浏览器也能跑出帧来，只用于自动验收构图与排版） */
+const LO = /[&#]lo=1/.test(location.hash);
+const SIM = LO ? 48 : coarse ? 144 : 176, DYE = LO ? 240 : coarse ? 640 : 900, ITER = LO ? 4 : 24;
 let velocity, dye, divergence, curlF, pressure, paperF, dpr = 1, glOK = true;
 /* 矾层：上过矾的墨。流体、清水、洇化都碰不到它，只在显示时叠上去。 */
 let baseF = null, HIST = [], sized = null;
@@ -478,7 +480,7 @@ function initFBOs(){
   bakePaper();
 }
 function resize(){
-  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  dpr = LO ? .5 : Math.min(window.devicePixelRatio || 1, 2);
   const w = Math.max(2, Math.round(canvas.clientWidth * dpr)), h = Math.max(2, Math.round(canvas.clientHeight * dpr));
   if (w !== canvas.width || h !== canvas.height) { canvas.width = w; canvas.height = h; initFBOs(); }
 }
@@ -1869,7 +1871,7 @@ function startPainting(){
     if (scrollMode){ buildJuan(sd); SEG = juan.seq[0]; } else juan.on = false;
     try { ghost.q = buildLandscape(sd); } finally { SEG = null; }
     mood.seed = sd; roll.seed0 = sd; ghost.done = false; if (juan.on) showYiJuan(); else showYi(mood); writePoem(mood, sd);
-    try { history.replaceState(null, '', `#t=${THEMES[themeIdx].id}&s=${sd}${scrollMode ? '&j=1' : ''}${FF !== 1 ? '&ff=' + FF : ''}${FZ ? '&fz=' + FZ : ''}`); } catch (_) {}
+    try { history.replaceState(null, '', `#t=${THEMES[themeIdx].id}&s=${sd}${scrollMode ? '&j=1' : ''}${FF !== 1 ? '&ff=' + FF : ''}${FZ ? '&fz=' + FZ : ''}${LO ? '&lo=1' : ''}`); } catch (_) {}
     ghost.speed = (reduced ? 5 : 1) * (mood.T.tempo || 1); ghost.cur = null; ghost.wait = .2; ghost.on = true; ghostEl.classList.add('on'); setPaintBtn(true); };
   if (hasInk) wash(go); else { hidePoem(); dropClones(); resetRoll(); go(); }
 }
