@@ -887,19 +887,38 @@ function seekMood(seed){
   for (let k = 0; k < 400; k++){ y = conceive((seed + k * 7919) >>> 0); if (y.shi === SEG.shi && y.ji === SEG.ji && y.qi === SEG.qi) return y; }
   y.shi = SEG.shi; return y;
 }
-/* 一卷的起承转合：开卷平远，渐起峰峦，中段水阔或云烟，写一处村桥，再起主峰，收于平远。
-   相邻两段段型不同；时辰沿卷从晓走到暮或夜；季与天气全卷一致，由题定。 */
+/* 一卷的起承转合不是一张固定的表，而是一套小语法：
+   起（开卷平远 / 江口 / 烟起 / 汀洲）→ 承（两三段渐起：峰峦、村桥、林麓、溪山、水阔、云烟）
+   → 转（主峰，前后可带云烟、溪山）→ 合（村桥、林麓、汀洲）→ 收（卷尾平远 / 汀洲 / 江天 / 烟收）。
+   相邻段型不同，一型至多两回，一卷至少五种段型；水题（寒江、平沙、三潭）水段更多。
+   时辰沿卷从晓走到暮或夜；季与天气全卷一致，由题定。 */
 function buildJuan(seed){
   const R = rng((seed ^ 0x5bd1e995) >>> 0), pk = a => a[Math.floor(R() * a.length)];
-  const X = pk(['shui', 'yun']), Y = X === 'shui' ? 'yun' : 'shui';
-  const seq = ['kai', 'feng', X, 'cun', Y, 'zhu']; if (R() < .5) seq.push(pk(['shui', 'cun'])); seq.push('wei');
-  const T = THEMES[themeIdx], SHI = ['晓', '午', '暮', '夜'];
+  const T = THEMES[themeIdx], wq = { hanjiang:1.8, pingsha:1.8, santan:1.6 }[T.id] || 1;
+  const wpick = o => { const ks = Object.keys(o), tot = ks.reduce((a, k) => a + o[k], 0); let r = R() * tot; for (const k of ks){ r -= o[k]; if (r <= 0) return k; } return ks[ks.length - 1]; };
+  let seq = [];
+  for (let tries = 0; tries < 60; tries++){
+    seq = [];
+    const add = o => { const last = seq[seq.length - 1], o2 = {};
+      for (const k in o) if (k !== last && seq.filter(x => x === k).length < 2) o2[k] = o[k];
+      if (Object.keys(o2).length) seq.push(wpick(o2)); };
+    add({ kai:3, shui:1.4*wq, yun:1.1, zhou:1.2*wq });                                   // 起
+    for (let i = 0, n = R() < .5 ? 2 : 3; i < n; i++) add({ feng:2, cun:1.5, lin:1.3, xi:1.2, shui:.9*wq, yun:.8 });   // 承
+    if (R() < .45) add({ yun:2, xi:1 });                                                  // 转前
+    if (seq[seq.length - 1] !== 'zhu') seq.push('zhu');                                   // 转
+    if (R() < .5) add({ yun:1.2, shui:1*wq, xi:1, lin:.8 });                              // 转后
+    if (R() < .5) add({ cun:1.5, lin:1, zhou:.8*wq });                                    // 合
+    add({ wei:3, zhou:1.4*wq, shui:1, yun:.7 });                                          // 收
+    if (seq.length >= 6 && seq.length <= 9 && new Set(seq).size >= 5 && seq[0] !== seq[seq.length - 1]) break;
+  }
+  const SHI = ['晓', '午', '暮', '夜'];
   const ji = { hanjiang:'冬', kongshan:'秋', yangguan:'秋' }[T.id] || pk(['春', '夏', '秋', '冬']);
   const qi = { hanjiang:'雪', kongshan:'雨', yangguan:'晴' }[T.id] || (ji === '冬' ? pk(['晴', '雪']) : pk(['晴', '晴', '雾', '雨']));
-  const NM = { kai:'开卷', feng:'峰峦', shui:'水阔', cun:'村桥', yun:'云烟', zhu:'主峰', wei:'卷尾' };
+  const NM0 = { kai:'开卷', feng:'峰峦', shui:'水阔', cun:'村桥', yun:'云烟', zhu:'主峰', wei:'卷尾', lin:'林麓', xi:'溪山', zhou:'汀洲' };
   const end = SHI.indexOf(pk(['暮', '夜', '夜'])), n = seq.length;
   juan.seq = seq.map((t, i) => { const shi = SHI[Math.min(end, Math.floor(i / (n - 1) * (end + .999)))];
-    return { type:t, name:NM[t], shi, ji, qi, hz:.4, disc: i === n - 1 ? (shi === '夜' ? 'moon' : 'sun') : null, i, n }; });
+    const name = i === 0 ? ({ kai:'开卷', shui:'江口', yun:'烟起', zhou:'汀洲' }[t] || NM0[t]) : i === n - 1 ? ({ wei:'卷尾', zhou:'汀洲', shui:'江天', yun:'烟收' }[t] || NM0[t]) : NM0[t];
+    return { type:t, name, shi, ji, qi, hz:.4, disc: i === n - 1 ? (shi === '夜' ? 'moon' : 'sun') : null, i, n, last: i === n - 1 }; });
   juan.i = 0; juan.on = true; juan.T = T; juan.used = [];
 }
 function conceive(seed){
@@ -1150,7 +1169,7 @@ function buildLandscape(seed){
   const y = SEG ? seekMood(seed) : (T.im ? themeMood(T, seed) : conceive(seed));
   y.T = SEG ? THEMES[0] : T; mood = y;
   if (SEG){   // 段型定虚实；时辰定墨色
-    y.xs = { kai:.2, feng:.5, shui:.16, cun:.4, yun:.22, zhu:.58, wei:.15 }[SEG.type]; y.D = y.xs / .34;
+    y.xs = { kai:.2, feng:.5, shui:.16, cun:.4, yun:.22, zhu:.58, wei:.15, lin:.38, xi:.45, zhou:.14 }[SEG.type]; y.D = y.xs / .34;
     y.dens = Math.max(.22, Math.min(1, .18 + y.xs * 1.7)); y.gap = .055 + (.5 - y.xs) * .22;
     y.ink *= { 晓:.82, 午:.95, 暮:1, 夜:1.06 }[y.shi] || 1;
     y.label = `${SEG.name} · ${y.shi} ${y.ji} ${y.qi} · ${QING_CN[y.qing]}`;
@@ -1658,7 +1677,10 @@ function buildLandscape(seed){
         cun:  { pref:{ diag:2, S:1 },          hz:hz,       hK:.7,  water:true,  k:['willow', 'tree', 'pavilion', 'man', 'grass', 'path'], rip:4, bridge:true, huts:true },
         yun:  { pref:{ S:1, zhi:1 },           hz:hz + .1,  hK:1.1, k:['pine', 'mist'], mists:3 },
         zhu:  { pref:{ diag:1, S:2, zhi:1 },   hz:hz + .06, hK:1.2, H:rr(.44, .52), k:['pine', 'falls', 'pavilion', 'man', 'path', 'rock'], mistK:1 },
-        wei:  { pref:{ liang:2 },              hz:hz - .03, hK:.4,  water:true,  k:[R() < .5 ? 'boat' : 'man', 'willow', 'grass'], rip:6, reeds:true }
+        wei:  { pref:{ liang:2 },              hz:hz - .03, hK:.4,  water:true,  k:[R() < .5 ? 'boat' : 'man', 'willow', 'grass'], rip:6, reeds:true },
+        lin:  { pref:{ diag:1, S:1 },          hz:hz + .02, hK:.65, k:['pine', 'tree', 'path', 'man', 'rock'], grove:Math.round(rr(5, 8)) },
+        xi:   { pref:{ zhi:2, S:1 },           hz:hz + .04, hK:1,   H:rr(.3, .38), water:true, k:['falls', 'rock', 'pine', 'path'], rip:3, bridge:R() < .5, mistK:1 },
+        zhou: { pref:{ liang:3 },              hz:hz - .07, hK:.22, water:true,  k:['grass'], rip:12, birds:Math.round(rr(5, 9)), reeds:true, sands:Math.round(rr(2, 3)) }
       }[g.type];
       for (const k of G.k) kinds.add(k);
       if (y.leaf === 0){ kinds.delete('willow'); kinds.add('pine'); }
@@ -1669,6 +1691,10 @@ function buildLandscape(seed){
       const near = ms[ms.length - 1];
       if (G.mistK) mist(main.base + (main.peakV - main.base) * .5, Math.max(0, main.x - .3), Math.min(1, main.x + .3));
       if (G.mists) for (let i = 0; i < G.mists; i++){ const m = ms[i % ms.length]; mist(m.base + (m.peakV - m.base) * rr(.2, .5), 0, 1); }
+      if (G.grove){ const hosts = ms.slice(-2);   // 林麓：一片树林沿近处两座坡脚铺开，前浓后淡
+        for (let i = 0; i < G.grove; i++){ const m = hosts[i % hosts.length], x = Math.max(.03, Math.min(.97, m.x + W(rr(-.5, .5) * m.w))), v = m.top(x) - .003, ink = m === hosts[hosts.length - 1] ? rr(.8, 1) : rr(.45, .65);
+          if (y.leaf === 0 || R() < .45) pine(x, v, rr(.14, .24), ink); else tree(x, v, rr(.12, .2), ink); } }
+      if (G.sands && G.water) for (let i = 0; i < G.sands; i++){ const p = Lo.at(rr(.2, .85)); sand(p[0] + W(rr(-.04, .04)), p[1], rr(.04, .08)); kinds.add('sand'); }
       if (G.boats && G.water){ const p = Lo.at(rr(.55, .8)); boat(p[0], p[1]); }
       if (G.reeds) reeds(Math.max(.05, Math.min(.95, near.x + W(rr(-.12, .12)))), near.base + .004, 7, .8);
       if (G.huts) for (let i = 0; i < 2; i++){ const x = Math.max(.04, Math.min(.96, near.x + W(rr(-.4, .4) * near.w))); pavilion(x, near.top(x) - .002, rr(.45, .6), false); }
@@ -1680,7 +1706,7 @@ function buildLandscape(seed){
         man(p[0], p[1] + .033, .8);
       }
       if (has('rain')) rain(30, .3);
-      if (g.type === 'wei' && y.shi === '夜') for (let i = 0; i < 7; i++) D(rr(.1, .9), rr(.74, .92), { r:rr(.0015, .0025), ink:.9, water:.1, after:.02 });
+      if (g.last && y.shi === '夜') for (let i = 0; i < 7; i++) D(rr(.1, .9), rr(.74, .92), { r:rr(.0015, .0025), ink:.9, water:.1, after:.02 });
       return { L:Lo, settle:{ disc:g.disc, big: y.shi === '暮' ? 1.4 : 1, birds:G.birds || 0 } };
     },
     hanjiang(){   // 千山只勾不染，天染灰；江上一舟，落在势线离三分点最近处
