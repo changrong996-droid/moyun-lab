@@ -1499,8 +1499,8 @@ function buildLandscape(seed){
   }
   function smoke(x, v, h){   // 孤烟直：几乎不摆
     /* 烟是气不是杆：底下细而实，越往上越淡越散，顶上被风带偏一点 */
-    const pts = []; for (let i = 0; i <= 16; i++){ const t = i/16; pts.push([x + W(Math.sin(t*3)*.004*t + t*t*t*.035), v + h*t]); }
-    S(pts.slice(0, 9), { r:.0022, ink:.24, water:.8, dry:.1, fade:.7, speed:.35, note:.12, vel:.3 });
+    const pts = []; for (let i = 0; i <= 16; i++){ const t = i/16; pts.push([x + W(Math.sin(t*3)*.006*t + t*t*.06), v + h*t]); }
+    S(pts.slice(0, 7), { r:.0018, ink:.2, water:.8, dry:.1, fade:.7, speed:.35, note:.12, vel:.3 });
     S(pts.slice(6), { r:.004, ink:.1, water:.92, fade:.8, speed:.5, note:.12, after:.02, vel:.2 });
     S(pts, { r:.009, ink:.05, water:.95, speed:1.2, note:.4, after:.05, vel:.15 });
   }
@@ -1629,11 +1629,19 @@ function buildLandscape(seed){
       return;
     }
     const wAt = u => w0 * (1 - u*.88);
-    if (o.banks !== false) for (const sd of [-1, 1]){ const pts = [];
-      for (let i = Math.round(u0*30); i <= 30; i++){ const u = i/30, p = Lo.at(u); pts.push([p[0] + W(sd*wAt(u)), p[1]]); }
-      S(pts, { r:.0018, ink:.5, water:.25, dry:.4, fade:.5, speed:.8, note:.08, tag:'water' }); }
+    /* 河身先铺一道淡水汽；岸线断成几截、湿笔不起飞白、近浓远淡，免得两道亮线像公路 */
+    if (o.banks !== false){
+      for (let k = 0; k < 2; k++){ const pts = [];
+        for (let i = Math.round(u0*16); i <= 16; i++){ const u = i/16, p = Lo.at(u); pts.push([p[0] + W(wAt(u)*rr(-.3, .3)), p[1]]); }
+        if (pts.length > 1) S(pts, { r:.005 + w0*.03, ink:.05, water:.95, fade:.7, speed:1.3, note:.3, after:.03, vel:.15, tag:'water' }); }
+      for (const sd of [-1, 1]){ let u = u0 + rr(0, .05);
+        while (u < .97){ const u1 = Math.min(1, u + rr(.1, .26)), pts = [];
+          for (let i = 0; i <= 8; i++){ const uu = u + (u1 - u)*i/8, p = Lo.at(uu); pts.push([p[0] + W(sd*wAt(uu)*rr(.93, 1.05)), p[1]]); }
+          const near = 1 - u*.75;
+          S(pts, { r:.0013 + .0007*near, ink:.16 + .2*near, water:.55, dry:.06, fade:.65, speed:.9, note:.08, after:.02, tag:'water' });
+          u = u1 + rr(.05, .14); } } }
     for (let i = 0; i < n; i++){ const u = rr(u0, .85), p = Lo.at(u), w = wAt(u)*rr(.4,.8);
-      S([[p[0] - W(w), p[1]], [p[0] + W(w*.6), p[1] + .002]], { r:.0014, ink:.38, dry:.5, speed:1.4, note:.06, after:.02, tag:'water' }); }
+      S([[p[0] - W(w), p[1]], [p[0] + W(w*.6), p[1] + .002]], { r:.0012, ink:.2, water:.55, dry:.25, speed:1.4, note:.06, after:.02, tag:'water' }); }
   }
   function drawPath(Lo, u0 = 0, u1 = 1){
     for (let i = Math.round(u0*60); i < Math.round(u1*60) - 1; i += 2) S([Lo.pts[i], Lo.pts[i + 1]], { r:.0015, ink:.55, dry:.5, speed:1.2, note:.04, after:.01 });
@@ -1732,7 +1740,8 @@ function buildLandscape(seed){
       if (y.qi === '雾') kinds.add('mist');
       /* ═══ 各题专属段型：用各题自己的原件（雪峰、沙丘、关城、长堤、石塔、山涧、沙渚……）画，不再套山水章法 ═══ */
       const cx = x => Math.max(.04, Math.min(.96, x)), K = (...a) => a.forEach(k => kinds.add(k));
-      const hzLine = hb => S([[-.02, hb], [1.02, hb + rr(-.004, .004)]], { r:.0014, ink:.4, water:.3, dry:.3, speed:1.2, note:.14, vel:.3 });
+      const hzLine = hb => { let x = -.02;   // 天际线断续、时隐时现，不是一把尺子
+        while (x < 1.02){ const x1 = Math.min(1.02, x + rr(.12, .32)); S([[x, hb + rr(-.003, .003)], [x1, hb + rr(-.003, .003)]], { r:.0012, ink:rr(.14, .26), water:.55, dry:.1, fade:.5, speed:1.2, note:.14, vel:.3 }); x = x1 + rr(.03, .1); } };
       const dike = (dv, d0, d1) => { S([[d0, dv], [d1, dv + .004]], { r:.0016, ink:.55, water:.3, speed:.9, note:.08 });
         for (let x = d0 + .02; x < d1; x += rr(.025, .04)) D(x, dv + .006 + rr(0, .006), { r:rr(.004, .007), ink:.5, water:.6, after:.02 }); };
       const lowMass = (Lo, o) => { const ms = farToNear(Lo); for (const m of ms) drawMass(m, o); return ms; };
