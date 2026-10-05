@@ -896,12 +896,32 @@ function buildJuan(seed){
   const R = rng((seed ^ 0x5bd1e995) >>> 0), pk = a => a[Math.floor(R() * a.length)];
   const T = THEMES[themeIdx], wq = { hanjiang:1.8, pingsha:1.8, santan:1.6 }[T.id] || 1;
   const wpick = o => { const ks = Object.keys(o), tot = ks.reduce((a, k) => a + o[k], 0); let r = R() * tot; for (const k of ks){ r -= o[k]; if (r <= 0) return k; } return ks[ks.length - 1]; };
+  /* 每个题有自己的段型和卷式：起、承、转（主段）、合、收各从哪几种段里抽。山水用原来那一套 */
+  const TG = {
+    hanjiang: { qi:{ hanjiang:2, xuean:1.5, xuefeng:1 }, cheng:{ xuefeng:2, hanjiang:1.4, xuean:1.4, yun:.7 }, zq:{ yun:1.5, hanjiang:1 }, zhu:'gudiao', zh:{ hanjiang:1, xuean:1 }, he:{ xuean:1.2, xuefeng:.8 }, shou:{ hanjiang:2.5, xuean:1, yun:.6 } },
+    damo:     { qi:{ shaqiu:2, changhe:1.5 }, cheng:{ shaqiu:1.6, changhe:1.4, fengsui:1.6 }, zq:{ changhe:1, shaqiu:1 }, zhu:'gucheng', zh:{ changhe:1, fengsui:1 }, he:{ fengsui:1, shaqiu:1 }, shou:{ luori:3 } },
+    yangguan: { qi:{ liuan:3 }, cheng:{ gudao:2, feng:1, yun:.8, cun:.8 }, zq:{ yun:1.4, gudao:1 }, zhu:'guancheng', zh:{ gudao:1, yun:.8 }, he:{ gudao:1, feng:.6 }, shou:{ gebi:3, yun:.6 } },
+    santan:   { qi:{ changdi:2, hushan:1.5, shui:1 }, cheng:{ hushan:1.6, changdi:1.4, huxin:1.6, shui:1 }, zq:{ yun:1, huxin:1 }, zhu:'santa', zh:{ huxin:1, changdi:1 }, he:{ changdi:1, huxin:1 }, shou:{ hutian:3 } },
+    kongshan: { qi:{ shanjian:2, yun:1.2, songshi:1 }, cheng:{ shanjian:1.6, songshi:1.5, zhulin:1.4, xi:1, lin:.8 }, zq:{ yun:1.6, shanjian:1 }, zhu:'kongshan', zh:{ zhulin:1, yun:1 }, he:{ zhulin:1, songshi:1 }, shou:{ yun:1.5, shanjian:1.2 } },
+    pingsha:  { qi:{ shazhu:2, zhou:1.2, shui:1 }, cheng:{ shazhu:1.6, ludi:1.6, shui:1.2, zhou:1 }, zq:{ ludi:1, shui:1 }, zhu:'luoyan', zh:{ shazhu:1, ludi:1 }, he:{ ludi:1, shazhu:1 }, shou:{ jiangtian:3, zhou:1 } }
+  }[T.id];
   let seq = [];
   for (let tries = 0; tries < 60; tries++){
     seq = [];
     const add = o => { const last = seq[seq.length - 1], o2 = {};
       for (const k in o) if (k !== last && seq.filter(x => x === k).length < 2) o2[k] = o[k];
       if (Object.keys(o2).length) seq.push(wpick(o2)); };
+    if (TG){
+      add(TG.qi);                                                                           // 起
+      for (let i = 0, n = R() < .5 ? 2 : 3; i < n; i++) add(TG.cheng);                     // 承
+      if (R() < .45) add(TG.zq);                                                            // 转前
+      if (seq[seq.length - 1] !== TG.zhu) seq.push(TG.zhu);                                 // 转：这个题的主段
+      if (R() < .5) add(TG.zh);                                                             // 转后
+      if (R() < .5) add(TG.he);                                                             // 合
+      add(TG.shou);                                                                         // 收
+      if (seq.length >= 6 && seq.length <= 9 && new Set(seq).size >= 4 && seq[0] !== seq[seq.length - 1]) break;
+      continue;
+    }
     add({ kai:3, shui:1.4*wq, yun:1.1, zhou:1.2*wq });                                   // 起
     for (let i = 0, n = R() < .5 ? 2 : 3; i < n; i++) add({ feng:2, cun:1.5, lin:1.3, xi:1.2, shui:.9*wq, yun:.8 });   // 承
     if (R() < .45) add({ yun:2, xi:1 });                                                  // 转前
@@ -914,7 +934,10 @@ function buildJuan(seed){
   const SHI = ['晓', '午', '暮', '夜'];
   const ji = { hanjiang:'冬', kongshan:'秋', yangguan:'秋' }[T.id] || pk(['春', '夏', '秋', '冬']);
   const qi = { hanjiang:'雪', kongshan:'雨', yangguan:'晴' }[T.id] || (ji === '冬' ? pk(['晴', '雪']) : pk(['晴', '晴', '雾', '雨']));
-  const NM0 = { kai:'开卷', feng:'峰峦', shui:'水阔', cun:'村桥', yun:'云烟', zhu:'主峰', wei:'卷尾', lin:'林麓', xi:'溪山', zhou:'汀洲' };
+  const NM0 = { kai:'开卷', feng:'峰峦', shui:'水阔', cun:'村桥', yun:'云烟', zhu:'主峰', wei:'卷尾', lin:'林麓', xi:'溪山', zhou:'汀洲',
+    xuefeng:'雪峰', hanjiang:'寒江', xuean:'雪岸', gudiao:'独钓', shaqiu:'沙丘', changhe:'长河', fengsui:'烽燧', gucheng:'孤城', luori:'落日',
+    liuan:'柳岸', gudao:'古道', guancheng:'阳关', gebi:'戈壁', changdi:'长堤', hushan:'湖山', huxin:'湖心', santa:'三潭', hutian:'湖天',
+    shanjian:'山涧', songshi:'松石', zhulin:'竹林', kongshan:'空山', shazhu:'沙渚', ludi:'芦荻', luoyan:'落雁', jiangtian:'江天' };
   const end = SHI.indexOf(pk(['暮', '夜', '夜'])), n = seq.length;
   juan.seq = seq.map((t, i) => { const shi = SHI[Math.min(end, Math.floor(i / (n - 1) * (end + .999)))];
     const name = i === 0 ? ({ kai:'开卷', shui:'江口', yun:'烟起', zhou:'汀洲' }[t] || NM0[t]) : i === n - 1 ? ({ wei:'卷尾', zhou:'汀洲', shui:'江天', yun:'烟收' }[t] || NM0[t]) : NM0[t];
@@ -1169,7 +1192,10 @@ function buildLandscape(seed){
   const y = SEG ? seekMood(seed) : (T.im ? themeMood(T, seed) : conceive(seed));
   y.T = SEG ? THEMES[0] : T; mood = y;
   if (SEG){   // 段型定虚实；时辰定墨色
-    y.xs = { kai:.2, feng:.5, shui:.16, cun:.4, yun:.22, zhu:.58, wei:.15, lin:.38, xi:.45, zhou:.14 }[SEG.type]; y.D = y.xs / .34;
+    y.xs = { kai:.2, feng:.5, shui:.16, cun:.4, yun:.22, zhu:.58, wei:.15, lin:.38, xi:.45, zhou:.14,
+      xuefeng:.4, hanjiang:.14, xuean:.3, gudiao:.3, shaqiu:.3, changhe:.25, fengsui:.3, gucheng:.5, luori:.2,
+      liuan:.42, gudao:.36, guancheng:.55, gebi:.15, changdi:.3, hushan:.38, huxin:.26, santa:.45, hutian:.14,
+      shanjian:.45, songshi:.48, zhulin:.42, kongshan:.58, shazhu:.24, ludi:.3, luoyan:.4, jiangtian:.12 }[SEG.type] ?? .3; y.D = y.xs / .34;
     y.dens = Math.max(.22, Math.min(1, .18 + y.xs * 1.7)); y.gap = .055 + (.5 - y.xs) * .22;
     y.ink *= { 晓:.82, 午:.95, 暮:1, 夜:1.06 }[y.shi] || 1;
     y.label = `${SEG.name} · ${y.shi} ${y.ji} ${y.qi} · ${QING_CN[y.qing]}`;
@@ -1227,7 +1253,7 @@ function buildLandscape(seed){
   function tree(x, v, h, ink){
     const ph = rr(0, 6.28), sw = rr(.004, .01), trunk = [];
     for (let i = 0; i <= 12; i++) { const t = i / 12; trunk.push([x + W(Math.sin(t*3+ph)*sw*t), v + h*t]); }
-    S(trunk, { r: .0048, ink: 1.1 * ink, water: .2, dry: .2, dryGrow: .5, fade: .3, speed: .55, note: .07, vel: .5 });
+    S(trunk, { r: .0048, ink: 1.1 * ink, water: .2, dry: .2, dryGrow: .5, fade: .3, speed: .55, note: .07, vel: .5, tag:'trunk' });
     const tips = [trunk[12]], nb = Math.floor(rr(3, 6));
     for (let b = 0; b < nb; b++) {
       const t = rr(.45, .92), p = trunk[Math.round(t * 12)], side = b % 2 ? 1 : -1, L = rr(.03, .06) * (1.2 - t), pts = [[p[0], p[1]]];
@@ -1258,7 +1284,7 @@ function buildLandscape(seed){
   function pine(x, v, h, ink){
     const ph = rr(0,6.28), lean = rr(-.03,.03), trunk = [];
     for (let i = 0; i <= 14; i++){ const t = i/14; trunk.push([x + W(lean*t + Math.sin(t*4+ph)*.008*t), v + h*t]); }
-    S(trunk, { r:.0058, ink:1.2*ink, water:.2, dry:.3, dryGrow:.5, fade:.25, speed:.5, note:.07, vel:.5 });
+    S(trunk, { r:.0058, ink:1.2*ink, water:.2, dry:.3, dryGrow:.5, fade:.25, speed:.5, note:.07, vel:.5, tag:'trunk' });
     for (let i = 0; i < 5; i++){ const p = trunk[2 + Math.floor(R()*10)]; S([[p[0]-W(.003), p[1]], [p[0]+W(.003), p[1]+.004]], { r:.0016, ink:.8*ink, dry:.5, speed:1.4, note:.05, after:.01 }); }
     const nb = Math.floor(rr(4, 7)), tips = [trunk[14]];
     for (let b = 0; b < nb; b++){
@@ -1275,15 +1301,20 @@ function buildLandscape(seed){
     return { x, w:.04, top: () => v + h, base: v };
   }
   function willow(x, v, h, ink){
+    /* 柳：先出几根拱起的枝，柳丝从枝上垂下，长短不齐、上密下疏；不再是一束从一个点直挂下来的亮丝 */
     const trunk = [];
     for (let i = 0; i <= 10; i++){ const t = i/10; trunk.push([x + W(Math.sin(t*2.5)*.01*t), v + h*.55*t]); }
-    S(trunk, { r:.0052, ink:1.1*ink, water:.2, dry:.25, dryGrow:.5, speed:.55, note:.07 });
-    const tp = trunk[10], n = Math.round(rr(14, 20) * Math.max(.4, y.leaf));
-    for (let i = 0; i < n; i++){
-      const sx = tp[0] + W(rr(-.05,.05)), sy = tp[1] + rr(-.01,.05), L = rr(.12,.24) * h / .3, dir = R() < .5 ? -1 : 1, pts = [];
-      for (let k = 0; k <= 8; k++){ const t = k/8; pts.push([sx + W(dir*.02*Math.sin(t*1.6)), sy + .02*Math.sin(t*1.2) - L*t*t]); }
-      S(pts, { r:.0012, ink:.65*ink, water:.15, dry:.3, fade:.6, speed:1.4, note:.03, after:.01, vel:.25 });
-    }
+    S(trunk, { r:.0052, ink:1.1*ink, water:.2, dry:.25, dryGrow:.5, speed:.55, note:.07, tag:'trunk' });
+    const tp = trunk[10], nb = Math.round(rr(3, 5)), anchors = [];
+    for (let b = 0; b < nb; b++){ const side = b % 2 ? 1 : -1, st = trunk[Math.round(rr(6, 10))], L = rr(.04, .08) * h / .3, lift = rr(.02, .05) * h / .3, pts = [];
+      for (let k = 0; k <= 6; k++){ const t = k/6; pts.push([st[0] + W(side*L*t), st[1] + lift*Math.sin(t*Math.PI*.8)]); }
+      S(pts, { r:.0022, ink:.8*ink, water:.15, dry:.3, speed:.8, note:.05, after:.02 });
+      for (let k = 2; k <= 6; k++) anchors.push(pts[k]); }
+    const n = Math.round(rr(12, 18) * Math.max(.4, y.leaf));
+    for (let i = 0; i < n; i++){ const a = anchors[Math.floor(R()*anchors.length)], L = Math.min(rr(.05, .13) * h / .3, a[1] - v - .01), sw = rr(-.008, .008), pts = [];
+      if (L < .01) continue;
+      for (let k = 0; k <= 6; k++){ const t = k/6; pts.push([a[0] + W(sw*t*t), a[1] - L*t]); }
+      S(pts, { r:.0009, ink:.42*ink, water:.12, dry:.35, fade:.7, speed:1.5, note:.03, after:.008, vel:.22 }); }
     return { x, w:.06, top: () => tp[1] + .02, base: v };
   }
   function bamboo(x, v, h, ink){
@@ -1342,7 +1373,7 @@ function buildLandscape(seed){
     const g0 = hide + .036, g1 = hide - .01;
     const seg = (xa, va, vb, ink) => { for (let k = 0; k < 2; k++){ const xx = xa + W((k - .5) * .005), pts = [];
       for (let i = 0; i <= 8; i++){ const t = i / 8; pts.push([xx + W(Math.sin(t * 4 + k * 2) * .0012 + t * t * .002 * sd), va - (va - vb) * t]); }
-      S(pts, { r:.0012 + k * .0004, ink:ink * (1 - k * .3), water:.12, dry:.65, fade:.6, speed:.9, note:.08, after:.02, vel:.3 }); } };
+      S(pts, { r:.0012 + k * .0004, ink:ink * (1 - k * .3), water:.12, dry:.65, fade:.6, speed:.9, note:.08, after:.02, vel:.3, tag:'water' }); } };
     const ledge = (xa, v) => S([[xa - W(rr(.008, .014)), v + .001], [xa + W(rr(.008, .012)), v - .002]], { r:.0018, ink:.55, water:.1, dry:.4, speed:1.3, note:.05, after:.02 });
     let cx = x, cv = vTop;
     if (g0 < vTop - .02){
@@ -1362,7 +1393,7 @@ function buildLandscape(seed){
   function ripples(v0, v1, xa0, xa1, n){
     for (let i = 0; i < n; i++){ const v = rr(v0, v1), xa = rr(xa0, xa1), xb = Math.min(xa + rr(.12,.35), .99), ph = rr(0,6), pts = [];
       for (let x = xa; x <= xb; x += .01) pts.push([x, v + Math.sin(x*60+ph)*.002]);
-      if (pts.length > 1) S(pts, { r:.0019, ink:.5, water:.1, dry:.5, dryGrow:.3, fade:.6, speed:1.4, note:.11, after:.05, vel:.35 }); }
+      if (pts.length > 1) S(pts, { r:.0019, ink:.5, water:.1, dry:.5, dryGrow:.3, fade:.6, speed:1.4, note:.11, after:.05, vel:.35, tag:'water' }); }
   }
   function sand(x, v, w){
     for (let k = 0; k < 2; k++){ const pts = []; for (let i = 0; i <= 12; i++){ const u = i/6 - 1; pts.push([x + W(u*w), v + .006*(1-u*u) - k*.004]); }
@@ -1585,15 +1616,15 @@ function buildLandscape(seed){
     const n = o.ripples ?? 6, u0 = o.u0 || 0;
     if (Lo.t === 'liang'){
       for (let i = 0; i < n; i++){ const v = rr(.1, Lo.hz - .12), xa = rr(.15,.6);
-        S([[xa, v], [Math.min(.95, xa + rr(.1,.25)), v + .002]], { r:.0014, ink:.36, dry:.5, speed:1.4, note:.07, after:.02 }); }
+        S([[xa, v], [Math.min(.95, xa + rr(.1,.25)), v + .002]], { r:.0014, ink:.36, dry:.5, speed:1.4, note:.07, after:.02, tag:'water' }); }
       return;
     }
     const wAt = u => w0 * (1 - u*.88);
     if (o.banks !== false) for (const sd of [-1, 1]){ const pts = [];
       for (let i = Math.round(u0*30); i <= 30; i++){ const u = i/30, p = Lo.at(u); pts.push([p[0] + W(sd*wAt(u)), p[1]]); }
-      S(pts, { r:.0018, ink:.5, water:.25, dry:.4, fade:.5, speed:.8, note:.08 }); }
+      S(pts, { r:.0018, ink:.5, water:.25, dry:.4, fade:.5, speed:.8, note:.08, tag:'water' }); }
     for (let i = 0; i < n; i++){ const u = rr(u0, .85), p = Lo.at(u), w = wAt(u)*rr(.4,.8);
-      S([[p[0] - W(w), p[1]], [p[0] + W(w*.6), p[1] + .002]], { r:.0014, ink:.38, dry:.5, speed:1.4, note:.06, after:.02 }); }
+      S([[p[0] - W(w), p[1]], [p[0] + W(w*.6), p[1] + .002]], { r:.0014, ink:.38, dry:.5, speed:1.4, note:.06, after:.02, tag:'water' }); }
   }
   function drawPath(Lo, u0 = 0, u1 = 1){
     for (let i = Math.round(u0*60); i < Math.round(u1*60) - 1; i += 2) S([Lo.pts[i], Lo.pts[i + 1]], { r:.0015, ink:.55, dry:.5, speed:1.2, note:.04, after:.01 });
@@ -1687,11 +1718,137 @@ function buildLandscape(seed){
     juan(){   // 长卷的一段：段型决定势、山的高低、水的宽窄和点景；远山一抹贯穿全卷，接缝处不断
       const g = SEG, hz = g.hz + rr(-.015, .015);
       const fw = g.type === 'wei', fs = fw || g.type === 'zhou';
-      farHills(g.hz + .03, fw ? 4 : 6, fs ? .02 : .015, g.type === 'feng' || g.type === 'zhu' ? .06 : fs ? .055 : .04, g.type === 'yun' ? .1 : .16, { sparse:fs, fadeR:fw });
-      kinds.add('peak');
       if (y.qi === '雪'){ kinds.add('snow'); y.leaf = 0; y.mossK *= .3; }
       if (y.qi === '雨') kinds.add('rain');
       if (y.qi === '雾') kinds.add('mist');
+      /* ═══ 各题专属段型：用各题自己的原件（雪峰、沙丘、关城、长堤、石塔、山涧、沙渚……）画，不再套山水章法 ═══ */
+      const cx = x => Math.max(.04, Math.min(.96, x)), K = (...a) => a.forEach(k => kinds.add(k));
+      const hzLine = hb => S([[-.02, hb], [1.02, hb + rr(-.004, .004)]], { r:.0014, ink:.4, water:.3, dry:.3, speed:1.2, note:.14, vel:.3 });
+      const dike = (dv, d0, d1) => { S([[d0, dv], [d1, dv + .004]], { r:.0016, ink:.55, water:.3, speed:.9, note:.08 });
+        for (let x = d0 + .02; x < d1; x += rr(.025, .04)) D(x, dv + .006 + rr(0, .006), { r:rr(.004, .007), ink:.5, water:.6, after:.02 }); };
+      const lowMass = (Lo, o) => { const ms = farToNear(Lo); for (const m of ms) drawMass(m, o); return ms; };
+      const JS = {
+        /* 寒江独钓 */
+        xuefeng(){ const hb = hz + .02, pk = []; for (let i = 0; i < 6; i++) pk.push({ c:rr(-.05, 1.05), h:rr(.08, .2), w:rr(.05, .1) });
+          const f = range(pk, hb, .008); mountain(f, hb, { ink:.55, s:.85, cun:6, moss:0, folds:4, x0:0, x1:1 });
+          const Lo = layout({ diag:2, zhi:1 }, hb - .02); lowMass(Lo, { ink:.7, cun:4, moss:0, folds:1 });
+          skyWash(f, hb + .02, .97, .06); drawWater(Lo, .08, { banks:false, ripples:2 }); K('peak', 'water', 'snow'); return { L:Lo }; },
+        hanjiang(){ farHills(hz + .03, 5, .02, .05, .14, { sparse:true }); const Lo = layout({ liang:3 }, hz - .05), ms = lowMass(Lo, { ink:.65, cun:3, moss:0, folds:1, hK:.4 });
+          drawWater(Lo, .1, { ripples:5 }); if (R() < .6){ const q = Lo.at(rr(.5, .8)); boat(cx(q[0] + W(rr(-.15, .15))), q[1]); K('boat'); }
+          const nm = ms[ms.length - 1]; reeds(nm.x, nm.base + .004, 5, .6); K('peak', 'water', 'snow'); return { L:Lo, birds:1 }; },
+        xuean(){ farHills(hz + .03, 6, .015, .04, .14); const Lo = layout({ diag:2, S:1 }, hz), ms = lowMass(Lo, { ink:.7, cun:4, moss:0, folds:1, hK:.6 });
+          drawWater(Lo, .1, { ripples:4 }); const nm = ms[ms.length - 1];
+          for (let i = 0; i < 4; i++){ const x = cx(nm.x + W(rr(-.5, .5) * nm.w)); tree(x, nm.top(x) - .003, rr(.12, .2), i ? .7 : 1); }
+          K('peak', 'tree', 'water', 'snow'); return { L:Lo }; },
+        gudiao(){ farHills(hz + .03, 4, .02, .05, .12, { sparse:true }); const Lo = layout({ liang:2, diag:1 }, hz - .06); lowMass(Lo, { ink:.6, cun:3, moss:0, folds:1, hK:.35 });
+          drawWater(Lo, .1, { banks:false, ripples:3 }); const fp = focal(Lo, .15, .6); boat(fp.x, fp.v);
+          S([[fp.x + W(.012), fp.v + .02], [fp.x + W(.05), fp.v + .045]], { r:.0011, ink:.9, speed:.8, note:.04 });          // 钓竿
+          S([[fp.x + W(.05), fp.v + .045], [fp.x + W(.052), fp.v + .004]], { r:.0006, ink:.45, speed:1.2, note:.03, after:.01 });   // 钓丝
+          ripples(fp.v - .006, fp.v + .002, fp.x - .03, fp.x + .05, 2); K('peak', 'boat', 'man', 'water', 'snow'); return { L:Lo }; },
+        /* 大漠孤烟 */
+        shaqiu(){ hzLine(hz); for (let i = 0; i < 3; i++) dune(hz - .03 - i*.045, .3 + i*.1, i);
+          const Lo = layout({ S:2, diag:2 }, hz); wetCut = null; for (const m of farToNear(Lo)) duneAt(m); K('sand'); return { L:Lo }; },
+        changhe(){ hzLine(hz); for (let i = 0; i < 2; i++) dune(hz - .03 - i*.04, .3 + i*.1, i);
+          const Lo = layout({ S:2, diag:1 }, hz); wetCut = { L:Lo, w0:.14 }; for (const m of farToNear(Lo)) duneAt(m);
+          drawWater(Lo, .14, { ripples:7 }); wetCut = null; K('sand', 'water'); return { L:Lo, birds:1 }; },
+        fengsui(){ hzLine(hz); for (let i = 0; i < 2; i++) dune(hz - .03 - i*.045, .3 + i*.1, i);
+          const Lo = layout({ diag:2, zhi:1 }, hz), ms = farToNear(Lo); for (const m of ms) duneAt(m);
+          const m0 = ms[0], tx = m0.x, tv = m0.base + m0.h*.6, th = .05, tw = .012;   // 烽燧：收分的土台，台上一缕烟
+          S([[tx - W(tw), tv], [tx - W(tw*.6), tv + th], [tx + W(tw*.6), tv + th], [tx + W(tw), tv]], { r:.002, ink:1, water:.2, speed:.7, note:.06 });
+          S([[tx - W(tw*.8), tv + th*.4], [tx + W(tw*.8), tv + th*.4]], { r:.009, ink:.15, water:.7, speed:2, note:.3, after:.02, vel:.2 });
+          smoke(tx, tv + th, rr(.18, .26)); K('sand'); return { L:Lo }; },
+        gucheng(){ hzLine(hz); for (let i = 0; i < 2; i++) dune(hz - .03 - i*.04, .3 + i*.1, i);
+          const Lo = layout({ S:2, diag:2, zhi:1 }, hz), ms = farToNear(Lo); wetCut = { L:Lo, w0:.12 }; for (const m of ms) duneAt(m);
+          drawWater(Lo, .12, { ripples:5 }); wetCut = null;
+          const gm = ms[0], gv = gm.base + gm.h*.6; gate(gm.x, gv, .7*gm.s + .15); smoke(cx(gm.x + W(gm.side*.12)), gv, rr(.28, .36));
+          K('sand', 'water', 'gate'); return { L:Lo }; },
+        luori(){ hzLine(hz); dune(hz - .05, .3, 0); const Lo = layout({ diag:2, S:1 }, hz); wetCut = { L:Lo, w0:.16 };
+          for (const m of farToNear(Lo)) if (m.d < 2) duneAt(m); drawWater(Lo, .16, { ripples:8 }); wetCut = null; K('sand', 'water', 'sun');
+          return { L:Lo, birds:2, after: st => { if (st.disc) reflect(st.disc[0], hz - .004, .02, 6, .05, .9); } }; },
+        /* 西出阳关 */
+        liuan(){ farHills(hz + .03, 5, .02, .05, .16); const Lo = layout({ diag:2, zhi:1 }, hz - .02); lowMass(Lo, { ink:.85, cun:6, moss:3, folds:1, hK:.6 });
+          drawPath(Lo, 0, .7); const nm = Lo.masses.find(m => m.d === 0);
+          for (let i = 0; i < 3; i++){ const x = cx(nm.x + W((i - 1)*rr(.05, .08))); willow(x, nm.top(x) - .003, rr(.22, .3)*(i === 1 ? 1 : .85), i === 1 ? 1 : .7); }
+          const hx = cx(nm.x + W(nm.side*.1)); pavilion(hx, nm.top(hx) - .003, 1, false);
+          const m1 = cx(nm.x - W(nm.side*.05)); man(m1, nm.top(m1) - .002, 1); man(m1 + W(.025), nm.top(m1 + W(.025)) - .002, .95);
+          K('peak', 'willow', 'pavilion', 'man', 'path'); return { L:Lo }; },
+        gudao(){ farHills(hz + .03, 6, .02, .06, .16); const Lo = layout({ zhi:2, S:2 }, hz), ms = lowMass(Lo, { ink:.85, cun:8, moss:3, folds:1 });
+          drawPath(Lo, 0, 1); const wp = Lo.at(rr(.3, .6)); man(wp[0], wp[1] + .004, .7);
+          if (y.leaf){ const nm = ms[ms.length - 1], x = cx(nm.x + W(nm.side*.08)); tree(x, nm.top(x) - .003, rr(.16, .22), .9); K('tree'); }
+          K('peak', 'path', 'man'); return { L:Lo, birds:1 }; },
+        guancheng(){ farHills(hz + .04, 5, .03, .08, .18); const Lo = layout({ zhi:2, S:2, diag:1 }, hz + .02); lowMass(Lo, { ink:.85, cun:8, moss:3, folds:1, hK:1.1 });
+          drawPath(Lo, 0, 1); const end = Lo.at(1); gate(end[0], end[1], .6); const wp = Lo.at(rr(.35, .5)); man(wp[0], wp[1] + .004, .6);
+          mist(hz - .02, 0, 1); K('peak', 'gate', 'path', 'man', 'mist'); return { L:Lo }; },
+        gebi(){ const hb = hz - .02; hzLine(hb); dune(hb - .04, .25, 0); dune(hb - .1, .32, 1);
+          const Lo = layout({ diag:2, zhi:1 }, hb); drawPath(Lo, 0, 1); const wp = Lo.at(rr(.55, .75)); man(wp[0], wp[1] + .003, .45);
+          for (let i = 0; i < 6; i++){ const x = rr(.05, .95), v = rr(.04, hb - .06); S([[x - W(.01), v], [x + W(.012), v + .001]], { r:.0013, ink:.3, dry:.6, speed:1.4, note:.04, after:.01 }); }
+          K('sand', 'path', 'man'); return { L:Lo, birds:2 }; },
+        /* 三潭印月 */
+        changdi(){ const hb = hz + .02; farHills(hb + .02, 6, .02, .06, .16); const dv = hb - rr(.04, .07), d0 = rr(-.05, .2), d1 = Math.min(1.05, d0 + rr(.6, .85));
+          dike(dv, d0, d1); for (let i = 0; i < 3; i++) tree(rr(d0 + .05, d1 - .05), dv + .004, rr(.08, .12), .6);
+          mist(dv + .015, 0, 1); const Lo = layout({ liang:3 }, hb - .06); drawWater(Lo, .1, { banks:false, ripples:6 }); K('peak', 'tree', 'water', 'mist'); return { L:Lo }; },
+        hushan(){ const hb = hz + .03, f = farHills(hb, 6, .03, .08, .18), tx = rr(.15, .85); pavilion(tx, f(tx) - .004, .6, true);
+          const Lo = layout({ liang:3, diag:1 }, hb - .05); lowMass(Lo, { ink:.75, cun:6, moss:3, folds:1, hK:.6 });
+          drawWater(Lo, .12, { banks:false, ripples:6 }); K('peak', 'tower', 'pavilion', 'water'); return { L:Lo, birds:1 }; },
+        huxin(){ farHills(hz + .03, 5, .02, .05, .14, { sparse:true }); const Lo = layout({ liang:3 }, hz - .05); drawWater(Lo, .1, { banks:false, ripples:8 });
+          const fp = focal(Lo, .2, .6), pts = []; for (let i = 0; i <= 14; i++){ const u = i/7 - 1; pts.push([fp.x + W(u*.06), fp.v + .012*(1 - u*u)]); }
+          S(pts, { r:.0024, ink:.8, water:.25, dry:.3, speed:.8, note:.07 });
+          pavilion(fp.x - W(.01), fp.v + .012, .7, false); tree(fp.x + W(.03), fp.v + .008, rr(.08, .11), .8);
+          if (R() < .6){ const q = Lo.at(rr(.6, .85)); boat(cx(q[0] + W(rr(-.2, .2))), q[1]); K('boat'); }
+          K('peak', 'pavilion', 'tree', 'water'); return { L:Lo }; },
+        santa(){ const hb = hz + .04, f = farHills(hb, 6, .03, .09, .2), tx = rr(.15, .85); pavilion(tx, f(tx) - .004, .6, true);
+          const dv = hb - rr(.05, .07), d0 = rr(0, .35); dike(dv, d0, d0 + rr(.45, .6)); mist(dv + .015, 0, 1);
+          const Lo = layout({ liang:3, diag:1 }, hb - .04), ms = lowMass(Lo, { ink:.75, cun:6, moss:3, folds:1, hK:.6 });
+          const im = ms[0]; pavilion(im.x, im.top(im.x) - .003, .85, false); drawWater(Lo, .12, { banks:false, ripples:7 });
+          const fp = focal(Lo, .15, .6);
+          [[-.12, -.03, 1.15], [0, .05, .8], [.12, 0, 1.05]].forEach(o => lantern(cx(fp.x + W(o[0])), Math.max(.08, fp.v + o[1]), o[2]));
+          K('peak', 'tower', 'mist', 'pavilion', 'water'); return { L:Lo }; },
+        hutian(){ farHills(hz + .03, 4, .02, .05, .14, { sparse:true, fadeR:true }); const Lo = layout({ liang:3 }, hz - .05), nm = Lo.masses.find(m => m.d === 0);
+          drawMass(nm, { ink:.7, cun:4, moss:2, folds:1, hK:.4 }); drawWater(Lo, .1, { banks:false, ripples:7 });
+          if (R() < .5){ const q = Lo.at(rr(.4, .7)); boat(q[0], q[1]); K('boat'); }
+          K('peak', 'water'); return { L:Lo, after: st => { if (st.disc) reflect(st.disc[0], hz - .08, .03, 8, .3); } }; },
+        /* 空山新雨 */
+        shanjian(){ farHills(hz + .04, 5, .03, .07, .14); const Lo = layout({ S:3, zhi:1 }, hz + .02), ms = lowMass(Lo, { ink:.85, cun:12, moss:6, folds:2, hK:1.1 });
+          drawWater(Lo, .05, { ripples:4, u0:.1 }); const nm = ms[ms.length - 1], rk = rock(cx(nm.x + W(nm.side*.05)), .03, rr(1, 1.4), .9);
+          pine(rk.x, rk.top(rk.x) - .004, rr(.24, .32), .9); const m0 = ms[0]; mist(m0.base + (m0.peakV - m0.base)*.5, Math.max(0, m0.x - .3), Math.min(1, m0.x + .3));
+          K('peak', 'water', 'rock', 'pine', 'mist'); return { L:Lo }; },
+        songshi(){ farHills(hz + .03, 6, .02, .06, .15); const Lo = layout({ diag:2, S:1 }, hz), ms = farToNear(Lo), nm = ms[ms.length - 1];
+          for (const m of ms) if (m !== nm) drawMass(m, { ink:.85, cun:10, moss:6, folds:2, hK:.8 });
+          const rk = rock(nm.x, .03, rr(1.6, 2), 1), px = rk.x;
+          pine(px - W(.02), rk.top(px - W(.02)) - .004, rr(.36, .46), 1); pine(px + W(.04), rk.top(px + W(.04)) - .004, rr(.24, .32), .7);
+          bamboo(cx(px - W(nm.side*.1)), .04, rr(.12, .18), .85); K('peak', 'rock', 'pine', 'bamboo'); return { L:Lo }; },
+        zhulin(){ farHills(hz + .03, 6, .02, .05, .15); const Lo = layout({ diag:1, zhi:1 }, hz), ms = lowMass(Lo, { ink:.8, cun:8, moss:5, folds:1, hK:.7 });
+          const hosts = ms.slice(-2); for (let i = 0; i < 5; i++){ const m = hosts[i % hosts.length], x = cx(m.x + W(rr(-.5, .5) * m.w)); bamboo(x, m.top(x) - .002, rr(.12, .2), m === hosts[hosts.length - 1] ? .9 : .55); }
+          drawPath(Lo, 0, .5); K('peak', 'bamboo', 'path'); return { L:Lo }; },
+        kongshan(){ farHills(hz + .06, 5, .05, .1, .16); const Lo = layout({ S:3, zhi:2 }, hz + .06), ms = farToNear(Lo), main = ms[0], nm = ms[ms.length - 1];
+          for (const m of ms) if (m !== nm) drawMass(m, m === main ? { ink:.85, cun:16, moss:8, folds:4, H:rr(.42, .5) } : { ink:.85, cun:14, moss:8, folds:3, hK:1.3 });
+          const rk = rock(nm.x, .03, rr(1.4, 1.8), 1); drawWater(Lo, .05, { ripples:4, u0:.38 });
+          const end = Lo.at(1), ft = main.top(end[0]) - .02, hide = main.base + (main.peakV - main.base)*.45;
+          if (ft > end[1] + .05){ falls(end[0], ft, end[1], { hide }); K('falls'); }
+          pine(rk.x - W(.02), rk.top(rk.x - W(.02)) - .004, rr(.34, .44), 1);
+          mist(hide, Math.max(0, main.x - .35), Math.min(1, main.x + .35)); K('peak', 'water', 'rock', 'pine', 'mist'); return { L:Lo }; },
+        /* 平沙落雁 */
+        shazhu(){ farHills(hz + .03, 5, .015, .045, .14, { sparse:true }); const Lo = layout({ diag:2, liang:2 }, hz - .05), ms = farToNear(Lo);
+          for (const m of ms){ sand(m.x, m.base + .01, m.w*1.6*wx); sand(m.x + W(m.side*m.w*.5), m.base + .022*m.s, m.w*wx); m.top = () => m.base + .02; }
+          for (let i = 0; i < 3; i++){ const q = Lo.at(rr(.15, .9)); sand(q[0] + W(rr(-.06, .06)), q[1], rr(.04, .08)); }
+          drawWater(Lo, .14, { banks:false, ripples:8 }); const nm = ms[ms.length - 1]; reeds(nm.x, nm.base + .01, 6, .8);
+          K('peak', 'sand', 'water', 'grass'); return { L:Lo, birds:2 }; },
+        ludi(){ farHills(hz + .03, 5, .015, .045, .14, { sparse:true }); const Lo = layout({ liang:2, diag:1 }, hz - .05), ms = farToNear(Lo), nm = ms.find(m => m.d === 0) || ms[ms.length - 1];
+          sand(nm.x, nm.base + .006, nm.w*2*wx); drawWater(Lo, .12, { banks:false, ripples:6 });
+          for (let i = 0; i < 4; i++) reeds(cx(nm.x + W(rr(-.6, .6)*nm.w*1.6)), nm.base + .008, Math.round(rr(5, 9)), rr(.7, 1.1));
+          const fm = ms.find(m => m.d === 2); if (fm){ sand(fm.x, fm.base + .004, fm.w*wx); reeds(fm.x, fm.base + .004, 5, .45); }
+          K('peak', 'grass', 'water', 'sand'); return { L:Lo, birds:3 }; },
+        luoyan(){ const P = PAINT.pingsha(); return { L:P.L, after:P.after }; },
+        jiangtian(){ farHills(hz + .03, 4, .02, .05, .14, { sparse:true, fadeR:true }); const Lo = layout({ liang:3 }, hz - .06), nm = Lo.masses.find(m => m.d === 0);
+          sand(nm.x, nm.base + .006, nm.w*1.6*wx); reeds(nm.x, nm.base + .008, 6, .8); drawWater(Lo, .1, { banks:false, ripples:8 });
+          K('peak', 'sand', 'grass', 'water'); return { L:Lo, birds:5 }; }
+      }[g.type];
+      if (JS){ const r = JS();
+        if (has('rain')) rain(30, .3);
+        if (g.last && y.shi === '夜') for (let i = 0; i < 7; i++) D(rr(.1, .9), rr(.74, .92), { r:rr(.0015, .0025), ink:.9, water:.1, after:.02 });
+        return { L:r.L, after:r.after, settle:{ disc:g.disc, big: y.shi === '暮' ? 1.4 : 1, birds: r.birds || 0 } }; }
+      farHills(g.hz + .03, fw ? 4 : 6, fs ? .02 : .015, g.type === 'feng' || g.type === 'zhu' ? .06 : fs ? .055 : .04, g.type === 'yun' ? .1 : .16, { sparse:fs, fadeR:fw });
+      kinds.add('peak');
       const G = {
         kai:  { pref:{ liang:3 },              hz:hz - .04, hK:.45, water:true,  k:['sand', 'grass'], rip:10, birds:Math.round(rr(3, 6)), reeds:true },
         feng: { pref:{ zhi:2, S:1 },           hz:hz + .05, hK:1.5, H:rr(.3, .36), k:['pine', 'path', 'rock'], mistK:1 },
@@ -1812,18 +1969,24 @@ function buildLandscape(seed){
       farHills(hb, 5, .015, .05, .16);
       const Lo = layout({ diag:2, liang:2, zhi:1 }, hb - .04), ms = farToNear(Lo);
       for (const m of ms){ sand(m.x, m.base + .01, m.w*1.6*wx); sand(m.x + W(m.side*m.w*.5), m.base + .022*m.s, m.w*wx); m.top = () => m.base + .02; }
+      for (let i = 0; i < 3; i++){ const p = Lo.at(rr(.15, .9)); sand(p[0] + W(rr(-.08, .08)), p[1] + rr(-.01, .01), rr(.04, .09)); }   // 远处再添几道浅渚
       const nm = ms[ms.length - 1]; reeds(nm.x, nm.base + .01, 14, 1.2);
-      drawWater(Lo, .14, { banks:false, ripples:6 });
+      if (ms.length > 1){ const m2 = ms[ms.length - 2]; reeds(Math.max(.05, Math.min(.95, m2.x + W(m2.side*m2.w*.4))), m2.base + .012, 8, .8); }
+      reeds(ms[0].x, ms[0].base + .01, 5, .5);
+      drawWater(Lo, .14, { banks:false, ripples:9 });
       const fp = focal(Lo, .2, .7);
       ['peak','sand','grass','water','birds'].forEach(k => kinds.add(k));
       return { L:Lo, settle:{ disc:'sun' }, after: st => {
         const far = Math.abs(st.B.x0 - fp.x) > Math.abs(st.B.x1 - fp.x) ? st.B.x0 + .06 : st.B.x1 - .06;
         const gx = Math.abs(far - fp.x) < .25 ? (fp.x < .5 ? Math.min(.92, fp.x + .3) : Math.max(.08, fp.x - .3)) : far;
-        const gv = IMv(st.B.s0 + (st.B.s1 - st.B.s0)*.45), n = Math.floor(rr(6,10)), lv = fp.v + .05, bow = rr(.06,.12);
+        const gv = IMv(st.B.s0 + (st.B.s1 - st.B.s0)*.45), n = Math.floor(rr(9,14)), lv = fp.v + .05, bow = rr(.06,.12);
         for (let i = 0; i < n; i++){ const t = Math.pow(i/(n - 1), .8), x = gx + (fp.x - gx)*t, v = gv + (lv - gv)*t + Math.sin(t*Math.PI)*bow;
           birdAt(x + W(rr(-.008,.008)), v + rr(-.006,.006), .95 - t*.3); }
-        for (let i = 0; i < 3; i++){ const x = fp.x + W(rr(-.05,.05)), v = fp.v + rr(.01,.03);
-          D(x, v + .004, { r:.003, ink:1.1, water:.2, after:.04 }); S([[x - W(.006), v], [x + W(.007), v + .002]], { r:.0016, ink:1, speed:.8, note:.05 }); } } };
+        for (let i = 0; i < 5; i++){ const x = fp.x + W(rr(-.07,.07)), v = fp.v + rr(.01,.03);
+          D(x, v + .004, { r:.003, ink:1.1, water:.2, after:.04 }); S([[x - W(.006), v], [x + W(.007), v + .002]], { r:.0016, ink:1, speed:.8, note:.05 }); }
+        /* 高处再一行远雁，排成人字，压住大片空白 */
+        const fx = st.B.x0 + (st.B.x1 - st.B.x0)*rr(.3, .7), fv = IMv(st.B.s0 + (st.B.s1 - st.B.s0)*.8), dir = fp.x < fx ? 1 : -1, arm = Math.floor(rr(3, 5));
+        birdAt(fx, fv, .45); for (let j = 1; j <= arm; j++) for (const sd of [-1, 1]) if (sd < 0 || j < arm) birdAt(fx + W(dir*j*.016), fv + sd*j*.007, .42); } };
     }
   };
 
@@ -1842,6 +2005,24 @@ function buildLandscape(seed){
   if (FRAME){ const f = FRAME;
     for (const d of Q){ if (d.pts) d.pts = d.pts.map(p => [f.x0 + p[0]*f.w, p[1]]); else if (d.dot) d.x = f.x0 + d.x*f.w; }
     const b = y.poemBox; if (b) y.poemBox = { x0:f.x0 + b.x0*f.w, x1:f.x0 + b.x1*f.w, s1:b.s1 }; }
+  /* 遮挡：水墨是一层层叠上去的，后画的树干压不住先画的水线。
+     所以树干立住以后，回头把先画的水纹、山涧、瀑布在树干那一窄条里断开，水就退到树后面去了 */
+  { const trunks = []; Q.forEach((d, i) => { if (d.tag === 'trunk' && d.pts){ let lo = 9, hi = -9; for (const q of d.pts){ lo = Math.min(lo, q[1]); hi = Math.max(hi, q[1]); } trunks.push({ i, lo, hi, pts:d.pts, hw:W(.006) + d.r }); } });
+    if (trunks.length){ const out = [];
+      Q.forEach((d, wi) => {
+        if (d.tag !== 'water' || !d.pts){ out.push(d); return; }
+        const ts = trunks.filter(t => t.i > wi); if (!ts.length){ out.push(d); return; }
+        const dense = [];
+        for (let k = 0; k < d.pts.length; k++){ const a = d.pts[k]; dense.push(a); const b = d.pts[k + 1]; if (!b) break;
+          const m = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / .003); for (let j = 1; j < m; j++) dense.push([a[0] + (b[0] - a[0])*j/m, a[1] + (b[1] - a[1])*j/m]); }
+        const hidden = q => ts.some(t => { if (q[1] < t.lo - .004 || q[1] > t.hi) return false; let best = t.pts[0];
+          for (const z of t.pts) if (Math.abs(z[1] - q[1]) < Math.abs(best[1] - q[1])) best = z; return Math.abs(best[0] - q[0]) < t.hw; });
+        let cur = [], cut = false;
+        for (const q of dense){ if (hidden(q)){ cut = true; if (cur.length > 1) out.push(Object.assign({}, d, { pts:cur })); cur = []; } else cur.push(q); }
+        if (!cut){ out.push(d); return; }
+        if (cur.length > 1) out.push(Object.assign({}, d, { pts:cur }));
+      });
+      Q.length = 0; for (const d of out) Q.push(d); } }
   y.kinds = kinds; y.kindsList = Array.from(kinds);
   F(() => showPoemWhenReady(y), .6);
   return Q;
