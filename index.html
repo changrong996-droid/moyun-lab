@@ -1842,7 +1842,7 @@ function paintSegment(){
   RESERVE = []; FRAME = { x0:0, w:SEGW }; NODISC = !SEG.disc;
   let q; try { q = buildLandscape(sd); } finally { FRAME = null; NODISC = false; SEG = null; }
   mood.seed = sd; writePoem(mood, sd); yiSeg();
-  ghost.q = q; ghost.speed = (reduced ? 5 : 1) * (mood.T.tempo || 1) * FF; ghost.cur = null; ghost.wait = .3; ghost.on = true; ghost.done = false;
+  ghost.q = q; ghost.speed = (reduced ? 5 : 1) * (mood.T.tempo || 1); ghost.cur = null; ghost.wait = .3; ghost.on = true; ghost.done = false;
   ghostEl.classList.add('on'); setPaintBtn(true);
 }
 function rollTick(dt){
@@ -1855,7 +1855,7 @@ function rollTick(dt){
   }
   if (!scrollMode || !ghost.done || ghost.on || washing || pointers.size){ roll.idle = 0; return; }
   roll.idle += dt;
-  const settled = !poemEl.hidden && performance.now() - poemAt > 4300;
+  const settled = !poemEl.hidden && performance.now() - poemAt > 4300 / FF;
   if (roll.idle > (settled ? 2.4 : 9)){
     if (!juan.on || juan.i >= juan.seq.length - 1){ scrollMode = false; setScrollBtn(); roll.idle = 0; if (juan.on) yiSeg('卷成'); juan.on = false; return; }
     startRoll();
@@ -1870,7 +1870,7 @@ function startPainting(){
     try { ghost.q = buildLandscape(sd); } finally { SEG = null; }
     mood.seed = sd; roll.seed0 = sd; ghost.done = false; if (juan.on) showYiJuan(); else showYi(mood); writePoem(mood, sd);
     try { history.replaceState(null, '', `#t=${THEMES[themeIdx].id}&s=${sd}${scrollMode ? '&j=1' : ''}${FF !== 1 ? '&ff=' + FF : ''}${FZ ? '&fz=' + FZ : ''}`); } catch (_) {}
-    ghost.speed = (reduced ? 5 : 1) * (mood.T.tempo || 1) * FF; ghost.cur = null; ghost.wait = .2; ghost.on = true; ghostEl.classList.add('on'); setPaintBtn(true); };
+    ghost.speed = (reduced ? 5 : 1) * (mood.T.tempo || 1); ghost.cur = null; ghost.wait = .2; ghost.on = true; ghostEl.classList.add('on'); setPaintBtn(true); };
   if (hasInk) wash(go); else { hidePoem(); dropClones(); resetRoll(); go(); }
 }
 function wash(then){
@@ -2037,7 +2037,8 @@ function frame(now){
   const raw = Math.max(1e-3, (now - last) / 1000), dt = Math.min(raw, 1 / 30); last = now;
   fps = fps * .95 + (1 / raw) * .05;
   resize();
-  ghostTick(dt); rollTick(dt);
+  /* 作画与卷动按真实时间走：帧率低时分几小步补足，不再跟着帧率变慢 */
+  for (let left = Math.min(raw, .25) * FF; left > 1e-6; ) { const d = Math.min(left, 1 / 30); ghostTick(d); rollTick(d); left -= d; }
   if (washing) washTick(dt);
   if (velQ.length) flush(velQ, velocity, 3000);
   if (dyeQ.length) flush(dyeQ, dye, 4);
